@@ -88,17 +88,31 @@ resizeTo(...sizeFor(0, PREVIEW_LONG));
 
 /* ---------- Audio ---------- */
 const audioEl = $('#soundtrack-el');
-let actx = null, monitor = null, recordDest = null;
+let actx = null, monitor = null, recordDest = null, bus = null;
+// Everything audible goes through one bus: the soundtrack element (single clip
+// or song) and, in the mix modes, a gain per clip driven by the edit.
 function ensureAudio() {
   if (actx) return;
   actx = new (window.AudioContext || window.webkitAudioContext)();
-  const src = actx.createMediaElementSource(audioEl);
+  bus = actx.createGain();
   monitor = actx.createGain();
   recordDest = actx.createMediaStreamDestination();
-  src.connect(monitor); monitor.connect(actx.destination);
-  src.connect(recordDest);
+  actx.createMediaElementSource(audioEl).connect(bus);
+  bus.connect(monitor); monitor.connect(actx.destination);
+  bus.connect(recordDest);
+  clips.forEach(attachClipAudio);
   applyVolume();
 }
+function attachClipAudio(c) {
+  if (!actx || c.gain) return;
+  c.gain = actx.createGain();
+  c.gain.gain.value = 0;
+  c.lastGain = 0;
+  actx.createMediaElementSource(c.video).connect(c.gain);
+  c.gain.connect(bus);
+}
+const isMix = () => S.soundtrack === 'mix-cuts' || S.soundtrack === 'mix-all';
+const usesElement = () => S.soundtrack === 'song' || S.soundtrack.startsWith('clip:');
 const resumeAudio = async () => { if (actx && actx.state !== 'running') { try { await actx.resume(); } catch (e) { /* needs gesture */ } } };
 document.addEventListener('pointerdown', () => { ensureAudio(); resumeAudio(); }, { passive: true });
 
@@ -116,7 +130,7 @@ function click(accent) {
 /* ---------- Master clock ---------- */
 const silent = { playing: false, base: 0, t0: 0 };
 const master = {
-  get audio() { return S.soundtrack !== 'none' && audioEl.readyState >= 1; },
+  get audio() { return usesElement() && audioEl.readyState >= 1; },
   now() { return this.audio ? audioEl.currentTime : (silent.playing ? silent.base + (performance.now() - silent.t0) / 1000 : silent.base); },
   get playing() { return this.audio ? !audioEl.paused : silent.playing; },
   async play() {
@@ -165,8 +179,11 @@ async function addClip(file) {
   }
   clips.push({
     id: nextId++, file, url, video, name: file.name, tex: makeClipTex(),
-    opacity: 1, enabled: true, duration: video.duration || 1,
+    opacity: 1, volume: 1, enabled: true, duration: video.duration || 1,
   });
+  const c = clips[clips.length - 1];
+  attachClipAudio(c);
+  c.video.muted = !isMix();
 }
 
 async function addFiles(files) {
@@ -183,6 +200,7 @@ function removeClip(i) {
   if (exportJob) return;
   const [c] = clips.splice(i, 1);
   c.video.pause(); c.video.remove(); URL.revokeObjectURL(c.url); gl.deleteTexture(c.tex);
+  if (c.gain) c.gain.disconnect();
   if (S.soundtrack === 'clip:' + c.id) setSoundtrack('none');
   afterClipsChanged();
 }
@@ -213,11 +231,17 @@ function renderSlots() {
         <div class="slot-name" title="${c.name}">${c.name}</div>
         <div class="slot-meta"><span>${fmt(c.duration)}</span><label><input type="checkbox" ${c.enabled ? 'checked' : ''}> In rotation</label></div>
         <div><div class="slot-op"><span>Opacity</span><span class="op-val">${Math.round(c.opacity * 100)}%</span></div>
-        <input type="range" min="0" max="1" step="0.01" value="${c.opacity}"></div>
+        <input type="range" class="op-in" min="0" max="1" step="0.01" value="${c.opacity}"></div>
+        <div class="slot-vol"><div class="slot-op"><span>Volume</span><span class="vol-val">${Math.round(c.volume * 100)}%</span></div>
+        <input type="range" class="vol-in" min="0" max="1.5" step="0.01" value="${c.volume}"></div>
       </div>`;
     el.querySelector('.slot-remove').onclick = () => removeClip(i);
     el.querySelector('input[type=checkbox]').onchange = e => { c.enabled = e.target.checked; el.classList.toggle('off', !c.enabled); rebuild(); };
-    const op = el.querySelector('input[type=range]');
+    const vol = el.querySelector('.vol-in');
+    vol.style.setProperty('accent-color', c.color);
+    setFill(vol);
+    vol.oninput = () => { c.volume = +vol.value; el.querySelector('.vol-val').textContent = Math.round(c.volume * 100) + '%'; setFill(vol); };
+    const op = el.querySelector('.op-in');
     op.style.setProperty('accent-color', c.color);
     setFill(op);
     op.oninput = () => { c.opacity = +op.value; el.querySelector('.op-val').textContent = Math.round(c.opacity * 100) + '%'; setFill(op); };
@@ -245,15 +269,21 @@ function drawThumb(c) {
 /* ---------- Soundtrack ---------- */
 const stSel = $('#soundtrack');
 function renderSoundtrackOptions() {
-  const opts = [`<option value="none">None (silent)</option>`];
+  const opts = [`<option value="none">No audio</option>`];
+  if (clips.length) {
+    opts.push(`<option value="mix-cuts">Mix all clips (follows the cuts)</option>`);
+    opts.push(`<option value="mix-all">Mix all clips (all at once)</option>`);
+  }
   clips.forEach((c, i) => opts.push(`<option value="clip:${c.id}">Clip ${i + 1} audio: ${c.name}</option>`));
   if (S.song) opts.push(`<option value="song">Song: ${S.song.name}</option>`);
   stSel.innerHTML = opts.join('');
   stSel.value = S.soundtrack;
   $('#detect-btn').disabled = S.soundtrack === 'none';
+  document.body.classList.toggle('mix-audio', isMix());
 }
 function soundtrackFile() {
   if (S.soundtrack === 'song') return S.song;
+  if (isMix()) return clips[0] ? clips[0].file : null; // beat detection listens to clip 1
   const c = clips.find(c => 'clip:' + c.id === S.soundtrack);
   return c ? c.file : null;
 }
@@ -263,8 +293,11 @@ async function setSoundtrack(v) {
   master.pause();
   S.soundtrack = v;
   if (stUrl) { URL.revokeObjectURL(stUrl); stUrl = null; }
-  const f = soundtrackFile();
-  if (f) {
+  ensureAudio();
+  clips.forEach(c => { c.video.muted = !isMix(); });
+  const f = usesElement() ? soundtrackFile() : null;
+  if (isMix()) { audioEl.removeAttribute('src'); audioEl.load(); }
+  else if (f) {
     ensureAudio();
     stUrl = URL.createObjectURL(f);
     audioEl.src = stUrl;
@@ -276,6 +309,7 @@ async function setSoundtrack(v) {
       audioEl.removeAttribute('src'); audioEl.load();
     }
   } else { S.soundtrack = 'none'; audioEl.removeAttribute('src'); audioEl.load(); }
+  if (S.soundtrack === 'none' || usesElement()) clips.forEach(c => setClipGain(c, 0));
   renderSoundtrackOptions();
   updateTotal(true);
   master.seek(S.secStart);
@@ -294,7 +328,7 @@ $('#song-input').onchange = e => {
 const secStartIn = $('#sec-start'), secEndIn = $('#sec-end');
 function updateTotal(resetSection) {
   const prevTotal = S.total;
-  S.total = S.soundtrack !== 'none' && isFinite(audioEl.duration) ? audioEl.duration : Math.max(0, ...clips.map(c => c.duration));
+  S.total = usesElement() && isFinite(audioEl.duration) ? audioEl.duration : Math.max(0, ...clips.map(c => c.duration));
   if (resetSection || S.secEnd === 0 || Math.abs(S.secEnd - prevTotal) < 0.05 || S.secEnd > S.total) S.secEnd = S.total;
   if (resetSection || S.secStart >= S.secEnd) S.secStart = 0;
   secStartIn.max = secEndIn.max = S.total.toFixed(1);
@@ -423,7 +457,7 @@ $('#detect-btn').onclick = async () => {
     setBpm(bpm);
     S.offsetFrac = clamp(offset / beatLen(), 0, 1);
     offsetIn.value = S.offsetFrac; updateOffsetLabel(); rebuild();
-    $('#tempo-status').textContent = `Detected ${bpm} BPM, first beat at ${offset.toFixed(2)}s. Use ÷2 or ×2 if it feels half or double time.`;
+    $('#tempo-status').textContent = `Detected ${bpm} BPM${isMix() ? " from clip 1's audio" : ''}, first beat at ${offset.toFixed(2)}s. Use ÷2 or ×2 if it feels half or double time.`;
   } catch (e) {
     console.error(e);
     $('#tempo-status').textContent = `Couldn't detect a beat (${e.message || 'decode failed'}). Enter or tap the BPM instead.`;
@@ -508,7 +542,7 @@ function layersAt(i, t) {
   const beat = beatLen();
   const c = clips[seg.clip];
   const since = t - seg.start;
-  const layers = [{ c, w: c.opacity, mode: 0, zoom: 1 + S.punch * 0.2 * Math.exp(-since / (beat * 0.3)) }];
+  const layers = [{ c, a: 1, w: c.opacity, mode: 0, zoom: 1 + S.punch * 0.2 * Math.exp(-since / (beat * 0.3)) }];
   if (S.overlap > 0.001) {
     const linger = S.overlap * 4 * beat;
     const strength = Math.min(1, S.overlap * 1.6);
@@ -521,7 +555,8 @@ function layersAt(i, t) {
       if (seen.has(s.clip)) continue;
       seen.add(s.clip);
       const k = clips[s.clip];
-      extra.push({ c: k, w: k.opacity * strength * (1 - age / linger), mode: S.blend, zoom: 1 });
+      const fade = strength * (1 - age / linger);
+      extra.push({ c: k, a: fade, w: k.opacity * fade, mode: S.blend, zoom: 1 });
     }
     layers.push(...extra.reverse());
   }
@@ -529,7 +564,7 @@ function layersAt(i, t) {
 }
 function composite(i, t) {
   accum.read.clear();
-  if (i < 0 || !segs[i]) { r.blit(accum.read, null); return new Set(); }
+  if (i < 0 || !segs[i]) { r.blit(accum.read, null); return []; }
   const layers = layersAt(i, t);
   const oa = r.w / r.h;
   for (const L of layers) {
@@ -541,7 +576,27 @@ function composite(i, t) {
   }
   const since = t - segs[i].start;
   r.pass(finalProg, null, { uFlash: S.flash * 0.85 * Math.exp(-since / (beatLen() * 0.12)) }, { uTex: accum.read });
-  return new Set(layers.map(L => clips.indexOf(L.c)));
+  return layers;
+}
+
+/* ---------- Clip audio mix ---------- */
+function setClipGain(c, g) {
+  if (!c.gain || Math.abs(g - c.lastGain) < 0.002) return;
+  c.gain.gain.setTargetAtTime(g, actx.currentTime, 0.006); // ~20 ms declick on cuts
+  c.lastGain = g;
+}
+function updateMix(layers) {
+  if (!actx) return;
+  if (S.soundtrack === 'mix-all') {
+    const on = clips.filter(c => c.enabled);
+    const norm = 1 / Math.sqrt(Math.max(1, on.length));
+    clips.forEach(c => setClipGain(c, c.enabled ? c.volume * norm : 0));
+  } else if (S.soundtrack === 'mix-cuts') {
+    clips.forEach(c => {
+      const L = layers.find(L => L.c === c);
+      setClipGain(c, L ? c.volume * L.a : 0);
+    });
+  }
 }
 
 audioEl.addEventListener('ended', () => { if (!exportJob) { master.seek(S.secStart); master.play(); } });
@@ -558,8 +613,9 @@ function frame() {
 
   const i = segs.length ? findSegment(segs, t) : -1;
   if (i !== curSeg) { onCut(i); curSeg = i; }
-  const visible = composite(i, t);
-  if (master.playing) preseek(i, t, visible);
+  const layers = composite(i, t);
+  updateMix(layers);
+  if (master.playing) preseek(i, t, new Set(layers.map(L => clips.indexOf(L.c))));
 
   const beat = beatLen();
   const bi = Math.floor((t - offsetSec()) / beat + 1e-6);
@@ -603,6 +659,7 @@ async function startExport() {
   if (!manual) { vtrack.stop(); stream = canvas.captureStream(fps); vtrack = stream.getVideoTracks()[0]; }
   const tracks = [vtrack];
   const withAudio = S.soundtrack !== 'none' && recordDest;
+  const audioLabel = isMix() ? ' with mixed clip audio' : ' with soundtrack';
   if (withAudio) tracks.push(recordDest.stream.getAudioTracks()[0]);
   const rec = new MediaRecorder(new MediaStream(tracks), { mimeType: mime, videoBitsPerSecond: bitrateFor(w, h, $('#ex-quality').value) * (fps / 30), audioBitsPerSecond: 192000 });
   const chunks = [];
@@ -613,7 +670,7 @@ async function startExport() {
   exportBtn.hidden = true; cancelBtn.hidden = false;
   $('#render-overlay').hidden = false;
   $('#download-again').hidden = true;
-  note.textContent = `${w}x${h} at ${fps} fps, ${mime.split(';')[0].replace('video/', '').toUpperCase()}${withAudio ? ' with soundtrack' : ', silent'}. Overlap, punch and flash can still be tweaked live.`;
+  note.textContent = `${w}x${h} at ${fps} fps, ${mime.split(';')[0].replace('video/', '').toUpperCase()}${withAudio ? audioLabel : ', silent'}. Overlap, punch and flash can still be tweaked live.`;
   rec.start(1000);
   try { await master.play(); } catch (e) { finishExport(true); alert('Playback was blocked. Click anywhere on the page and try again.'); }
 }

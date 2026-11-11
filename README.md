@@ -9,7 +9,14 @@ Two tools, switchable from the header:
 
 ## Beat Cut
 
-1. Add up to 5 clips. Pick a soundtrack: any clip's audio, a separate song file (MP3, WAV, M4A, or a video), or none.
+1. Add up to 5 clips and choose the **Audio**:
+   - **No audio**: silent render.
+   - **Mix all clips (follows the cuts)**: you hear whichever clip is on screen; with Overlap on, lingering clips stay audible as they fade.
+   - **Mix all clips (all at once)**: every clip in rotation plays together, level-balanced.
+   - **Clip N audio**: one clip's soundtrack runs uninterrupted under the whole edit.
+   - **Song file**: a separate MP3, WAV, M4A (or a video's audio).
+
+   In the mix modes each clip gets a **Volume** slider. Beat detection listens to the chosen soundtrack (clip 1 in the mix modes).
 2. Set the tempo: type a BPM, tap along, or press **Detect beat from soundtrack** (finds the BPM and where the first beat lands). Use ÷2 / ×2 for half or double time and **Beat offset** to nudge the grid. Turn on **Click track** to hear the grid while previewing.
 3. **Switch every** 1/4, 1/2, 1, 2, 4 or 8 beats. **Randomize timing** varies individual cut lengths (half, double, dotted and so on) while staying on the quarter-beat grid; **Reshuffle** rolls a new pattern.
 4. **Clip order**: in order, random (never the same clip twice in a row) or ping-pong. **On each cut**: keep each clip rolling, or jump to a random spot in it.

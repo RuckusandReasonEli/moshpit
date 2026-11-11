@@ -54,3 +54,7 @@
 .seg-wide { display: flex; width: 100%; }
 .seg-wide .seg-btn { flex: 1; }
 .block .param { margin: 12px 0; }
+
+/* Per-clip volume only matters when clip audio is mixed */
+.slot-vol { display: none; }
+body.mix-audio .slot-vol { display: block; }
