@@ -7,5 +7,7 @@ import softGlitch from './softGlitch.js';
 import hardGlitch from './hardGlitch.js';
 import stretch from './stretch.js';
 import eightBit from './eightBit.js';
+import multiEye from './multiEye.js';
+import linesMeasure from './linesMeasure.js';
 
-export const EFFECTS = [lumaMesh, opticalFlow, dataMosh, feedback, softGlitch, hardGlitch, stretch, eightBit];
+export const EFFECTS = [lumaMesh, opticalFlow, dataMosh, feedback, softGlitch, hardGlitch, stretch, eightBit, multiEye, linesMeasure];

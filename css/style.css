@@ -197,3 +197,6 @@ body.exporting .gallery, body.exporting .transport { opacity: 0.4; pointer-event
 .group .params { padding-bottom: 12px; }
 .color-param .param-head { justify-content: space-between; }
 .color-param input[type="color"] { width: 44px; height: 28px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel-2); padding: 2px; cursor: pointer; }
+
+.track-status { font-size: 11.5px; color: var(--accent-2); margin-top: 6px; font-family: var(--mono); }
+.track-note { font-size: 11px; color: var(--muted); margin-top: 4px; line-height: 1.4; }

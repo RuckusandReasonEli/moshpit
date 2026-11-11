@@ -36,6 +36,8 @@ Two tools, switchable from the header:
 | Hard Glitch | Multi-scale random block displacement, color split, block corruption |
 | Stretch | Smears everything past a line, with wave and jaggies, in 4 directions |
 | 8-Bit | Pixelation, Bayer dithering and 3 CGA palettes |
+| Multi-Eye Multi-Mouth | Finds eyes and/or mouths with face tracking and scatters feathered copies around the frame. Set how many of each, size, drift, spin, and how many jump to new spots on each bass hit (or on a timer for silent clips) |
+| Lines & Measurements | Motion-tracking overlay: eyes, nose, mouth, chin, fingertips, knuckles, shoulders, elbows, wrists, hips, knees and ankles, plus high-contrast "sharp points", linked by skeleton / nearest / web / chain lines with pixel distances, coordinates, random codes or a mix, tracker brackets and a HUD |
 
 ## Global Effects
 
@@ -48,6 +50,12 @@ A standard grading suite applied to every frame **before** the chosen effect (so
 - **Lens & Frame:** Vignette, Vignette Size, Zoom (crop), Flip
 
 Every slider supports **+EQ** audio linking, and double-clicking a slider resets it. The switch on the effect panel turns the effect off so you can render with Global Effects only; clicking any effect card turns it back on. The Global Effects switch toggles the whole suite for quick before/after comparisons.
+
+## Tracking effects
+
+Multi-Eye Multi-Mouth and Lines & Measurements use [MediaPipe Tasks Vision](https://ai.google.dev/edge/mediapipe/solutions/guide) (face, hand and pose landmarkers). The library lives in `vendor/mediapipe`; the models (about 17 MB total) download from Google's model host the first time you open one of these effects, then the browser caches them. Tracking runs on the device, and your video is never uploaded. Per Google's privacy notice, the library does send anonymous performance metrics to Google; the app tells users this next to those effects.
+
+Tracking is budgeted per frame: on a fast GPU all models run every frame; on slower machines they take turns, so points update a little less often instead of the render dropping frames. Global Effects flip and zoom are applied to the tracked points so overlays stay aligned.
 
 ## Audio reactivity
 
@@ -100,6 +108,8 @@ js/cut/beat.js      Tempo and beat-phase detection, tap tempo
 js/cut/schedule.js  Seeded cut-list generator
 css/style.css       Styles
 js/global.js        Global Effects grading stage
+js/detect.js        Shared MediaPipe face/hand/pose tracker
+vendor/mediapipe/   MediaPipe Tasks Vision 1.2.2 (Apache-2.0)
 js/main.js          App wiring: upload, playback loop, gallery, params, export
 js/gl.js            WebGL2 core: shaders, render targets, ping-pong buffers, shared GLSL
 js/audio.js         Web Audio analysis, EQ bands, transient detection

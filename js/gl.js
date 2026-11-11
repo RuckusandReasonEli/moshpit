@@ -117,6 +117,12 @@ class Program {
     if (!gl.getProgramParameter(p, gl.LINK_STATUS)) throw new Error('Program link error: ' + gl.getProgramInfoLog(p));
     this.p = p;
     this.locs = new Map();
+    this.types = new Map();
+    const n = gl.getProgramParameter(p, gl.ACTIVE_UNIFORMS);
+    for (let i = 0; i < n; i++) {
+      const info = gl.getActiveUniform(p, i);
+      this.types.set(info.name.replace(/\[0\]$/, ''), info.type);
+    }
   }
   loc(name) {
     if (!this.locs.has(name)) this.locs.set(name, this.gl.getUniformLocation(this.p, name));
@@ -124,13 +130,16 @@ class Program {
   }
 }
 
-function setUniform(gl, loc, v) {
+function setUniform(gl, loc, v, type) {
   if (loc === null || v === undefined) return;
-  if (typeof v === 'number' || typeof v === 'boolean') gl.uniform1f(loc, +v);
+  if (typeof v === 'number' || typeof v === 'boolean') { gl.uniform1f(loc, +v); return; }
+  if (type === gl.FLOAT_VEC4) gl.uniform4fv(loc, v);
+  else if (type === gl.FLOAT_VEC3) gl.uniform3fv(loc, v);
+  else if (type === gl.FLOAT_VEC2) gl.uniform2fv(loc, v);
+  else if (type === gl.FLOAT) gl.uniform1fv(loc, v);
   else if (v.length === 2) gl.uniform2fv(loc, v);
   else if (v.length === 3) gl.uniform3fv(loc, v);
-  else if (v.length === 4) gl.uniform4fv(loc, v);
-  else gl.uniform3fv(loc, v); // vec3 arrays (palettes)
+  else gl.uniform4fv(loc, v);
 }
 
 export class Renderer {
@@ -293,7 +302,7 @@ export class Renderer {
   }
 
   setUniforms(prog, uniforms) {
-    for (const name in uniforms) setUniform(this.gl, prog.loc(name), uniforms[name]);
+    for (const name in uniforms) setUniform(this.gl, prog.loc(name), uniforms[name], prog.types.get(name));
   }
 
   /** Draw a fullscreen pass into target (null = canvas). */

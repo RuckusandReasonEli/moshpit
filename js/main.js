@@ -3,6 +3,7 @@ import { EFFECTS } from './effects/index.js';
 import { AudioEngine, BANDS } from './audio.js';
 import { pickMime, bitrateFor, downloadBlob } from './export.js';
 import { GLOBAL, Grader, isNeutral } from './global.js';
+import { Tracker } from './detect.js';
 
 const $ = s => document.querySelector(s);
 const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
@@ -78,6 +79,61 @@ try {
 mainR.grader = new Grader(mainR);
 galR.grader = new Grader(galR);
 const mainInst = new Map(), galInst = new Map();
+
+/* ---------- Tracking (face / hands / body) ---------- */
+const tracker = new Tracker();
+window.moshpitTracker = tracker; // handy for debugging in the console
+let lastTrack = { faces: [], hands: [], poses: [], fresh: false };
+let rawTrack = { faces: [], hands: [], poses: [] };
+function neededKinds() {
+  const kinds = new Set();
+  const add = fx => { if (fx.needs) fx.needs(resolve(fx)).forEach(k => kinds.add(k)); };
+  if (state.fxOn) add(getFx(state.selected));
+  // Gallery previews only use models the user has already opted into by opening a tracking effect.
+  if (galleryVisible && !exportJob) EFFECTS.forEach(fx => {
+    if (fx.needs) fx.needs(resolve(fx)).forEach(k => { if (tracker.loading[k]) kinds.add(k); });
+  });
+  return [...kinds];
+}
+// Landmarks come in video space (y down). Map them through Global Effects flip/zoom into frame UVs (y up).
+function mapTrack(raw) {
+  const gp = globalParams();
+  const flip = gp ? Math.round(gp.flip) : 0, z = gp ? gp.zoom : 1;
+  const map = (l, useVis) => {
+    let x = (l.x - 0.5) * z + 0.5, y = (1 - l.y - 0.5) * z + 0.5;
+    if (flip === 1 || flip === 3) x = 1 - x;
+    if (flip === 2 || flip === 3) y = 1 - y;
+    return { x, y, v: useVis ? l.visibility : 1 }; // only the pose model reports meaningful visibility
+  };
+  const conv = (list, useVis) => list.map(lms => lms.map(l => map(l, useVis)));
+  return { faces: conv(raw.faces, false), hands: conv(raw.hands, false), poses: conv(raw.poses, true), fresh: true };
+}
+function updateTracking(force) {
+  lastTrack.fresh = false;
+  const kinds = neededKinds();
+  if (!kinds.length) return;
+  tracker.ensure(kinds);
+  if (!tracker.ready(kinds)) return;
+  // Keep tracking inside a per-frame time budget (tighter for preview, which also drives the gallery).
+  const run = tracker.schedule(kinds, force ? 24 : 14, frameCount);
+  for (const k of ['face', 'hands', 'pose']) if (!kinds.includes(k)) rawTrack[{ face: 'faces', hands: 'hands', pose: 'poses' }[k]] = [];
+  rawTrack = tracker.detect(video, run, rawTrack);
+  lastTrack = mapTrack(rawTrack);
+}
+function trackCtx() {
+  const gp = globalParams();
+  const z = gp ? gp.zoom : 1;
+  return { track: lastTrack, hit: state.hasAudio === true ? audio.levels.hit : 0, srcW: video.videoWidth / z, srcH: video.videoHeight / z };
+}
+tracker.onChange = () => { updateTrackStatus(); markDirty(); };
+function updateTrackStatus() {
+  const fx = getFx(state.selected);
+  const kinds = fx.needs ? fx.needs(resolve(fx)) : [];
+  const el = $('#track-status');
+  el.hidden = !kinds.length;
+  el.textContent = kinds.length ? (state.ready ? tracker.statusText(kinds) : 'Uses on-device face, hand and body tracking. Models load when you add a video.') : '';
+  $('#track-note').hidden = !kinds.length;
+}
 const instance = (map, r, fx) => { if (!map.has(fx.id)) map.set(fx.id, fx.create(r)); return map.get(fx.id); };
 const resetAll = () => { [...mainInst.values(), ...galInst.values()].forEach(i => i.reset()); };
 
@@ -211,6 +267,7 @@ function buildParams() {
   $('#fx-desc').textContent = fx.description;
   paramRows = buildControls(paramsEl, fx, false);
   updateBadge();
+  updateTrackStatus();
 }
 let globalRows = [];
 function buildGlobal() { globalRows = buildControls($('#global-params'), GLOBAL, true); updateBadge(); }
@@ -444,7 +501,8 @@ function hookFrames() {
 function renderPreview(step, dt) {
   const t = video.currentTime;
   const fx = getFx(state.selected);
-  const ctx = { step, time: t, frame: frameCount, dt };
+  if (step) updateTracking(false);
+  const ctx = { step, time: t, frame: frameCount, dt, ...trackCtx() };
   const gp = globalParams();
   mainR.time = t; mainR.frameIndex = frameCount; mainR.gradeParams = gp;
   if (step) mainR.upload(video, video.videoWidth, video.videoHeight);
@@ -588,7 +646,10 @@ function exportFrame(mediaTime) {
   frameCount++;
   mainR.time = mediaTime; mainR.frameIndex = frameCount; mainR.gradeParams = globalParams();
   mainR.upload(video, video.videoWidth, video.videoHeight);
-  if (state.fxOn) job.inst.render(resolve(job.fx), { step: true, time: mediaTime, frame: frameCount, dt }, null);
+  if (state.fxOn) {
+    updateTracking(true);
+    job.inst.render(resolve(job.fx), { step: true, time: mediaTime, frame: frameCount, dt, ...trackCtx() }, null);
+  }
   else mainR.blit(mainR.cur, null);
   if (job.manual) job.vtrack.requestFrame();
   setRenderProgress(mediaTime - job.start, job.end - job.start);
