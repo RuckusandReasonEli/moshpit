@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Moshpit · In-browser video effects</title>
+  <meta name="description" content="Upload a video, preview glitch, mosh and feedback effects, link them to the audio EQ, and render the result. Runs entirely in your browser.">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 32 32%27%3E%3Crect width=%2732%27 height=%2732%27 rx=%278%27 fill=%27%23ff4fa3%27/%3E%3Crect x=%278%27 y=%278%27 width=%2716%27 height=%2716%27 rx=%273%27 fill=%27%2353f0ff%27/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <span class="logo" aria-hidden="true"></span>
+      <div>
+        <h1>MOSHPIT</h1>
+        <p>In-browser video FX. Nothing leaves your machine.</p>
+      </div>
+    </div>
+    <div class="top-actions">
+      <span id="file-chip" class="chip" hidden></span>
+      <label class="btn btn-primary" for="file-input">Upload video</label>
+      <input id="file-input" type="file" accept="video/*" hidden>
+    </div>
+  </header>
+
+  <main class="layout">
+    <section class="stage">
+      <div class="viewer" id="viewer">
+        <canvas id="main-canvas" width="960" height="540"></canvas>
+        <div class="dropzone" id="dropzone">
+          <div class="dz-inner">
+            <div class="dz-icon" aria-hidden="true"></div>
+            <h2>Drop a video to start</h2>
+            <p>MP4, MOV or WebM. Every effect previews a 3 second loop of your clip. Pick one, tune it, then render the full video.</p>
+            <label class="btn btn-primary" for="file-input">Choose a file</label>
+          </div>
+        </div>
+        <button class="play-overlay" id="play-overlay" hidden>Click to start preview</button>
+        <div class="viewer-badge" id="effect-badge"></div>
+        <div class="render-overlay" id="render-overlay" hidden>
+          <div class="render-card">
+            <div class="render-title">Rendering <span id="render-pct">0%</span></div>
+            <div class="progress"><div class="progress-fill" id="render-fill"></div></div>
+            <div class="render-sub" id="render-sub">Keep this tab visible while it renders.</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="transport" id="transport">
+        <button class="icon-btn" id="play-btn" title="Play / pause (space)" disabled>
+          <svg viewBox="0 0 24 24" class="i-pause"><path d="M7 5h3v14H7zM14 5h3v14h-3z"/></svg>
+          <svg viewBox="0 0 24 24" class="i-play"><path d="M8 5l11 7-11 7z"/></svg>
+        </button>
+        <div class="window-ctl">
+          <div class="window-labels">
+            <span>Preview window</span>
+            <span id="window-label">0:00 to 0:03</span>
+          </div>
+          <div class="window-track">
+            <input type="range" id="window-start" min="0" max="0" step="0.01" value="0" disabled>
+            <div class="playhead" id="playhead"></div>
+          </div>
+        </div>
+        <div class="seg" role="group" aria-label="Loop length">
+          <button class="seg-btn is-on" data-loop="window">3s loop</button>
+          <button class="seg-btn" data-loop="full">Full</button>
+        </div>
+        <div class="vol">
+          <button class="icon-btn" id="mute-btn" title="Mute monitor">
+            <svg viewBox="0 0 24 24"><path d="M4 9h4l5-4v14l-5-4H4z"/><path class="wave" d="M16 8.5a5 5 0 0 1 0 7M18.5 6a8.5 8.5 0 0 1 0 12" fill="none" stroke="currentColor" stroke-width="2"/></svg>
+          </button>
+          <input type="range" id="volume" min="0" max="1" step="0.01" value="0.8" aria-label="Monitor volume">
+        </div>
+      </div>
+
+      <div class="gallery-head">
+        <h2>Effects</h2>
+        <p>Live 3 second previews. Click one to edit.</p>
+      </div>
+      <div class="gallery" id="gallery"></div>
+    </section>
+
+    <aside class="panel">
+      <section class="block" id="fx-block">
+        <div class="block-head">
+          <div>
+            <h2 id="fx-name">Effect</h2>
+            <p id="fx-desc" class="muted"></p>
+          </div>
+          <div class="head-actions">
+            <button class="btn btn-ghost btn-sm" id="randomize-btn" title="Randomize">Shuffle</button>
+            <button class="btn btn-ghost btn-sm" id="reset-btn" title="Reset to defaults">Reset</button>
+          </div>
+        </div>
+        <div id="params" class="params"></div>
+      </section>
+
+      <section class="block" id="audio-block">
+        <div class="block-head">
+          <div>
+            <h2>Audio reactivity</h2>
+            <p class="muted" id="audio-status">Upload a video to detect audio.</p>
+          </div>
+          <label class="switch" title="Turn audio reactivity on or off">
+            <input type="checkbox" id="audio-toggle" disabled>
+            <span class="switch-track"><span class="switch-thumb"></span></span>
+          </label>
+        </div>
+        <div class="eq" id="eq"></div>
+        <p class="hint">Tap <span class="eq-tag">+EQ</span> next to any slider to link it to a band. Depth can be negative to invert.</p>
+        <div class="audio-settings">
+          <div class="mini">
+            <label for="audio-range">Range <span id="audio-range-val">24 dB</span></label>
+            <input type="range" id="audio-range" min="6" max="48" step="1" value="24">
+          </div>
+          <div class="mini">
+            <label for="audio-smooth">Smoothing <span id="audio-smooth-val">40%</span></label>
+            <input type="range" id="audio-smooth" min="0" max="1" step="0.01" value="0.4">
+          </div>
+          <label class="check"><input type="checkbox" id="audio-agc" checked> Auto gain (adapts to loud and quiet songs)</label>
+        </div>
+      </section>
+
+      <section class="block" id="export-block">
+        <div class="block-head"><div><h2>Render</h2><p class="muted">Processes in real time, then downloads automatically.</p></div></div>
+        <div class="export-grid">
+          <label>Resolution
+            <select id="ex-res">
+              <option value="source">Source (up to 1920 px)</option>
+              <option value="1080">1080p</option>
+              <option value="720" selected>720p</option>
+              <option value="480">480p</option>
+            </select>
+          </label>
+          <label>Quality
+            <select id="ex-quality">
+              <option value="high" selected>High</option>
+              <option value="medium">Medium</option>
+              <option value="low">Small file</option>
+            </select>
+          </label>
+          <label>Length
+            <select id="ex-range">
+              <option value="full" selected>Full video</option>
+              <option value="window">Preview window only</option>
+            </select>
+          </label>
+          <label>Format
+            <select id="ex-format">
+              <option value="auto" selected>Auto (MP4 when supported)</option>
+              <option value="webm">WebM</option>
+            </select>
+          </label>
+        </div>
+        <button class="btn btn-primary btn-block" id="export-btn" disabled>Process &amp; download</button>
+        <button class="btn btn-ghost btn-block" id="cancel-btn" hidden>Cancel render</button>
+        <p class="muted small" id="export-note"></p>
+        <a id="download-again" class="small" hidden>Download again</a>
+      </section>
+    </aside>
+  </main>
+
+  <video id="video" playsinline preload="auto"></video>
+  <script type="module" src="js/main.js"></script>
+</body>
+</html>
