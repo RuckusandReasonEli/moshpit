@@ -92,12 +92,32 @@
             <h2 id="fx-name">Effect</h2>
             <p id="fx-desc" class="muted"></p>
           </div>
-          <div class="head-actions">
-            <button class="btn btn-ghost btn-sm" id="randomize-btn" title="Randomize">Shuffle</button>
-            <button class="btn btn-ghost btn-sm" id="reset-btn" title="Reset to defaults">Reset</button>
-          </div>
+          <label class="switch" title="Turn the effect off to use only Global Effects">
+            <input type="checkbox" id="fx-toggle" checked>
+            <span class="switch-track"><span class="switch-thumb"></span></span>
+          </label>
+        </div>
+        <p class="off-note">Effect is off. Renders use only the Global Effects. Click any effect card or flip the switch to turn it back on.</p>
+        <div class="head-actions fx-actions">
+          <button class="btn btn-ghost btn-sm" id="randomize-btn" title="Randomize">Shuffle</button>
+          <button class="btn btn-ghost btn-sm" id="reset-btn" title="Reset to defaults">Reset</button>
         </div>
         <div id="params" class="params"></div>
+      </section>
+
+      <section class="block" id="global-block">
+        <div class="block-head">
+          <div>
+            <h2>Global Effects</h2>
+            <p class="muted">Standard adjustments applied to every frame before the effect. Double-click a slider to reset it.</p>
+          </div>
+          <label class="switch" title="Turn Global Effects on or off">
+            <input type="checkbox" id="global-toggle" checked>
+            <span class="switch-track"><span class="switch-thumb"></span></span>
+          </label>
+        </div>
+        <div id="global-params"></div>
+        <div class="head-actions fx-actions"><button class="btn btn-ghost btn-sm" id="global-reset">Reset all</button></div>
       </section>
 
       <section class="block" id="audio-block">

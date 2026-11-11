@@ -2,6 +2,7 @@ import { Renderer } from './gl.js';
 import { EFFECTS } from './effects/index.js';
 import { AudioEngine, BANDS } from './audio.js';
 import { pickMime, bitrateFor, downloadBlob } from './export.js';
+import { GLOBAL, Grader, isNeutral } from './global.js';
 
 const $ = s => document.querySelector(s);
 const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
@@ -33,7 +34,7 @@ let dirty = true, frameCount = 0, exportJob = null;
 const markDirty = () => { dirty = true; };
 
 /* ---------- Params ---------- */
-const isRange = p => p.type !== 'select';
+const isRange = p => p.type !== 'select' && p.type !== 'color';
 function defaultParams(fx) {
   const values = {}, mods = {};
   for (const p of fx.params) {
@@ -43,6 +44,10 @@ function defaultParams(fx) {
   return { values, mods };
 }
 EFFECTS.forEach(fx => { state.params[fx.id] = defaultParams(fx); });
+state.params.global = defaultParams(GLOBAL);
+state.globalOn = true;
+state.fxOn = true;
+const globalParams = () => (state.globalOn ? resolve(GLOBAL) : null);
 
 function resolve(fx) {
   const st = state.params[fx.id], out = {};
@@ -70,6 +75,8 @@ try {
   viewer.querySelector('.dz-inner').innerHTML = `<h2>WebGL2 is required</h2><p>${e.message} Try a recent Chrome, Edge, Firefox or Safari.</p>`;
   throw e;
 }
+mainR.grader = new Grader(mainR);
+galR.grader = new Grader(galR);
 const mainInst = new Map(), galInst = new Map();
 const instance = (map, r, fx) => { if (!map.has(fx.id)) map.set(fx.id, fx.create(r)); return map.get(fx.id); };
 const resetAll = () => { [...mainInst.values(), ...galInst.values()].forEach(i => i.reset()); };
@@ -114,24 +121,40 @@ const bandOptions = `<option value="none">Off</option>` + BANDS.map(b => `<optio
 const fmtVal = (p, v) => (p.step >= 1 ? Math.round(v) : (+v).toFixed(p.step < 0.01 ? 3 : 2));
 const setFill = (input) => { const pct = ((input.value - input.min) / (input.max - input.min)) * 100; input.style.setProperty('--fill', pct + '%'); };
 
-function buildParams() {
-  const fx = getFx(state.selected);
-  const st = state.params[fx.id];
-  $('#fx-name').textContent = fx.name;
-  $('#fx-desc').textContent = fx.description;
-  $('#effect-badge').textContent = fx.name;
-  paramsEl.innerHTML = '';
-  paramRows = [];
-  for (const p of fx.params) {
+/** Build slider/select/color controls for any param set (an effect or Global Effects). */
+function buildControls(container, def, grouped) {
+  const st = state.params[def.id];
+  const rows = [];
+  container.innerHTML = '';
+  let parent = container, group = null;
+  for (const p of def.params) {
+    if (grouped && p.group !== group) {
+      group = p.group;
+      const det = document.createElement('details');
+      det.className = 'group';
+      det.open = group === 'Light';
+      det.innerHTML = `<summary>${group}</summary><div class="params"></div>`;
+      container.appendChild(det);
+      parent = det.querySelector('.params');
+    }
     const row = document.createElement('div');
     row.className = 'param';
-    if (!isRange(p)) {
+    if (p.type === 'select') {
       row.classList.add('select-param');
       row.innerHTML = `<div class="param-head"><span class="param-label">${p.label}</span></div><select>${p.options.map((o, i) => `<option value="${i}">${o}</option>`).join('')}</select>`;
       const sel = row.querySelector('select');
       sel.value = st.values[p.id];
-      sel.addEventListener('change', () => { st.values[p.id] = +sel.value; markDirty(); });
-      paramsEl.appendChild(row);
+      sel.addEventListener('change', () => { st.values[p.id] = +sel.value; afterChange(def); });
+      parent.appendChild(row);
+      continue;
+    }
+    if (p.type === 'color') {
+      row.classList.add('color-param');
+      row.innerHTML = `<div class="param-head"><span class="param-label">${p.label}</span><input type="color"></div>`;
+      const inp = row.querySelector('input');
+      inp.value = st.values[p.id];
+      inp.addEventListener('input', () => { st.values[p.id] = inp.value; afterChange(def); });
+      parent.appendChild(row);
       continue;
     }
     row.innerHTML = `
@@ -163,25 +186,47 @@ function buildParams() {
       setFill(input); setFill(depth);
       refreshCardPills(); refreshEqUsage();
     };
-    input.addEventListener('input', () => { st.values[p.id] = +input.value; sync(); markDirty(); });
+    input.addEventListener('input', () => { st.values[p.id] = +input.value; sync(); afterChange(def); });
+    input.addEventListener('dblclick', () => { st.values[p.id] = p.value; input.value = p.value; sync(); afterChange(def); });
     band.addEventListener('change', () => { m.band = band.value; sync(); });
     depth.addEventListener('input', () => { m.depth = +depth.value; sync(); });
     modBtn.addEventListener('click', () => { modRow.hidden = !modRow.hidden; });
     sync();
-    paramsEl.appendChild(row);
-    paramRows.push({ p, ghost });
+    parent.appendChild(row);
+    rows.push({ p, ghost });
   }
+  return rows;
 }
+function afterChange(def) { if (def.id === 'global') updateBadge(); markDirty(); }
+
+function updateBadge() {
+  const fx = getFx(state.selected);
+  const g = state.globalOn && !isNeutral(resolve(GLOBAL));
+  $('#effect-badge').textContent = state.fxOn ? fx.name + (g ? ' + Global' : '') : (g ? 'Global Effects only' : 'Original');
+}
+
+function buildParams() {
+  const fx = getFx(state.selected);
+  $('#fx-name').textContent = fx.name;
+  $('#fx-desc').textContent = fx.description;
+  paramRows = buildControls(paramsEl, fx, false);
+  updateBadge();
+}
+let globalRows = [];
+function buildGlobal() { globalRows = buildControls($('#global-params'), GLOBAL, true); updateBadge(); }
 
 function updateGhosts() {
   if (!state.audioOn) return;
-  const vals = resolve(getFx(state.selected));
-  for (const { p, ghost } of paramRows) ghost.style.left = ((vals[p.id] - p.min) / (p.max - p.min)) * 100 + '%';
+  for (const [def, rows] of [[getFx(state.selected), paramRows], [GLOBAL, globalRows]]) {
+    const vals = resolve(def);
+    for (const { p, ghost } of rows) ghost.style.left = ((vals[p.id] - p.min) / (p.max - p.min)) * 100 + '%';
+  }
 }
 
 function selectEffect(id) {
   if (exportJob) return;
   state.selected = id;
+  setFxOn(true);
   for (const [k, c] of cards) c.el.classList.toggle('is-selected', k === id);
   buildParams();
   const inst = mainInst.get(id);
@@ -198,6 +243,7 @@ $('#randomize-btn').addEventListener('click', () => {
   const fx = getFx(state.selected);
   const st = state.params[fx.id];
   for (const p of fx.params) {
+    if (p.type === 'color') continue;
     if (!isRange(p)) { st.values[p.id] = Math.floor(Math.random() * p.options.length); continue; }
     const span = (p.max - p.min) * 0.5;
     let v = p.value + (Math.random() * 2 - 1) * span;
@@ -206,6 +252,21 @@ $('#randomize-btn').addEventListener('click', () => {
   }
   buildParams(); markDirty();
 });
+
+/* ---------- Effect + Global toggles ---------- */
+function setFxOn(on) {
+  state.fxOn = on;
+  $('#fx-toggle').checked = on;
+  $('#fx-block').classList.toggle('is-off', !on);
+  updateBadge(); markDirty();
+}
+$('#fx-toggle').addEventListener('change', e => setFxOn(e.target.checked));
+$('#global-toggle').addEventListener('change', e => {
+  state.globalOn = e.target.checked;
+  $('#global-block').classList.toggle('is-off', !state.globalOn);
+  refreshEqUsage(); updateBadge(); markDirty();
+});
+$('#global-reset').addEventListener('click', () => { state.params.global = defaultParams(GLOBAL); buildGlobal(); markDirty(); });
 
 /* ---------- EQ meters ---------- */
 const eqEl = $('#eq');
@@ -220,7 +281,7 @@ for (const b of BANDS) {
   eqFills[b.id] = el.querySelector('.eq-fill');
 }
 function refreshEqUsage() {
-  const used = linkedBands(getFx(state.selected));
+  const used = new Set([...linkedBands(getFx(state.selected)), ...(state.globalOn ? linkedBands(GLOBAL) : [])]);
   eqEl.querySelectorAll('.eq-band').forEach(el => el.classList.toggle('used', used.has(el.dataset.band)));
 }
 function updateMeters() {
@@ -384,12 +445,18 @@ function renderPreview(step, dt) {
   const t = video.currentTime;
   const fx = getFx(state.selected);
   const ctx = { step, time: t, frame: frameCount, dt };
-  mainR.time = t; mainR.frameIndex = frameCount;
+  const gp = globalParams();
+  mainR.time = t; mainR.frameIndex = frameCount; mainR.gradeParams = gp;
   if (step) mainR.upload(video, video.videoWidth, video.videoHeight);
-  if (mainR.hasFrame) instance(mainInst, mainR, fx).render(resolve(fx), ctx, null);
-  if (step && galleryVisible) {
-    galR.time = t; galR.frameIndex = frameCount;
-    galR.upload(video, video.videoWidth, video.videoHeight);
+  else mainR.regrade();
+  if (mainR.hasFrame) {
+    if (state.fxOn) instance(mainInst, mainR, fx).render(resolve(fx), ctx, null);
+    else mainR.blit(mainR.cur, null);
+  }
+  if (galleryVisible && (step || galR.hasFrame)) {
+    galR.time = t; galR.frameIndex = frameCount; galR.gradeParams = gp;
+    if (step) galR.upload(video, video.videoWidth, video.videoHeight);
+    else galR.regrade();
     for (const g of EFFECTS) {
       instance(galInst, galR, g).render(resolve(g), ctx, null);
       cards.get(g.id).ctx2d.drawImage(galR.canvas, 0, 0);
@@ -519,9 +586,10 @@ function exportFrame(mediaTime) {
   job.lastT = now;
   audio.update(dt);
   frameCount++;
-  mainR.time = mediaTime; mainR.frameIndex = frameCount;
+  mainR.time = mediaTime; mainR.frameIndex = frameCount; mainR.gradeParams = globalParams();
   mainR.upload(video, video.videoWidth, video.videoHeight);
-  job.inst.render(resolve(job.fx), { step: true, time: mediaTime, frame: frameCount, dt }, null);
+  if (state.fxOn) job.inst.render(resolve(job.fx), { step: true, time: mediaTime, frame: frameCount, dt }, null);
+  else mainR.blit(mainR.cur, null);
   if (job.manual) job.vtrack.requestFrame();
   setRenderProgress(mediaTime - job.start, job.end - job.start);
   if (mediaTime >= job.end - 0.02) finishExport(false);
@@ -555,7 +623,8 @@ async function finishExport(cancelled) {
     const type = job.mime.split(';')[0];
     const ext = type.includes('mp4') ? 'mp4' : 'webm';
     const blob = new Blob(job.chunks, { type });
-    const name = `${state.fileName}_${job.fx.id}_${job.w}x${job.h}.${ext}`;
+    const tag = state.fxOn ? job.fx.id : 'global';
+    const name = `${state.fileName}_${tag}_${job.w}x${job.h}.${ext}`;
     if (lastDownload) URL.revokeObjectURL(lastDownload);
     lastDownload = downloadBlob(blob, name);
     const again = $('#download-again');
@@ -574,6 +643,7 @@ async function finishExport(cancelled) {
 }
 
 /* ---------- Boot ---------- */
+buildGlobal();
 selectEffect(state.selected);
 refreshCardPills();
 refreshEqUsage();

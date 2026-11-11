@@ -181,3 +181,19 @@ body.exporting .gallery, body.exporting .transport { opacity: 0.4; pointer-event
 .modes a.on { background: var(--panel-2); color: var(--text); }
 .modes a:hover { color: var(--text); }
 
+
+/* Effect on/off and Global Effects */
+.fx-actions { margin: -4px 0 12px; }
+#global-block .fx-actions { margin: 12px 0 0; }
+.off-note { display: none; font-size: 12.5px; line-height: 1.45; color: var(--accent-2); margin: -4px 0 12px; }
+.block.is-off .off-note { display: block; }
+.block.is-off .params, .block.is-off #global-params, .block.is-off .fx-actions { opacity: 0.35; pointer-events: none; }
+.group { border-top: 1px solid var(--line); }
+.group:first-child { border-top: 0; }
+.group summary { cursor: pointer; list-style: none; padding: 11px 0; font-size: 13px; font-weight: 700; display: flex; justify-content: space-between; align-items: center; }
+.group summary::-webkit-details-marker { display: none; }
+.group summary::after { content: "+"; color: var(--muted); font-weight: 400; font-size: 16px; }
+.group[open] summary::after { content: "\2212"; }
+.group .params { padding-bottom: 12px; }
+.color-param .param-head { justify-content: space-between; }
+.color-param input[type="color"] { width: 44px; height: 28px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel-2); padding: 2px; cursor: pointer; }

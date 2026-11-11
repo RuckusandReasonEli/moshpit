@@ -236,6 +236,8 @@ export class Renderer {
     this.canvas.width = w; this.canvas.height = h;
     this.frames.forEach(f => f && f.dispose());
     this.frames = [this.createTarget(w, h), this.createTarget(w, h)];
+    if (this.raw) this.raw.dispose();
+    this.raw = this.createTarget(w, h);
     this.hasFrame = false;
   }
 
@@ -248,12 +250,16 @@ export class Renderer {
     gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
     this.fi ^= 1;
     const taps = Math.min(4, Math.max(1, Math.ceil(sw / this.w / 2)));
-    this.pass(this.downProg, this.frames[this.fi], { uTaps: taps, uSpan: [1 / this.w, 1 / this.h] }, { uTex: this.srcTex });
+    const dest = this.grader ? this.raw : this.frames[this.fi];
+    this.pass(this.downProg, dest, { uTaps: taps, uSpan: [1 / this.w, 1 / this.h] }, { uTex: this.srcTex });
+    if (this.grader) this.grader.apply(this.raw, this.frames[this.fi], this.gradeParams);
     if (!this.hasFrame) {
       this.blit(this.frames[this.fi], this.frames[this.fi ^ 1]);
       this.hasFrame = true;
     }
   }
+  /** Re-run the grading stage on the latest frame (used when paused and a global slider moves). */
+  regrade() { if (this.grader && this.hasFrame) this.grader.apply(this.raw, this.frames[this.fi], this.gradeParams); }
   get cur() { return this.frames[this.fi]; }
   get prev() { return this.frames[this.fi ^ 1]; }
 

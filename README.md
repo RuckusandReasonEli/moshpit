@@ -37,6 +37,18 @@ Two tools, switchable from the header:
 | Stretch | Smears everything past a line, with wave and jaggies, in 4 directions |
 | 8-Bit | Pixelation, Bayer dithering and 3 CGA palettes |
 
+## Global Effects
+
+A standard grading suite applied to every frame **before** the chosen effect (so motion effects like Data Mosh and Optical Flow work on the graded image). It affects the gallery previews, the main preview and the render.
+
+- **Light:** Exposure, Contrast, Brightness, Highlights, Shadows, Gamma, Fade (matte blacks)
+- **Color:** Saturation, Vibrance, Temperature, Tint, Hue Rotate
+- **Detail:** Blur, Softness (diffusion glow), Sharpen, Film Grain
+- **Color Overlay:** color, amount and blend mode (Normal, Multiply, Screen, Overlay, Soft Light, Color, Add)
+- **Lens & Frame:** Vignette, Vignette Size, Zoom (crop), Flip
+
+Every slider supports **+EQ** audio linking, and double-clicking a slider resets it. The switch on the effect panel turns the effect off so you can render with Global Effects only; clicking any effect card turns it back on. The Global Effects switch toggles the whole suite for quick before/after comparisons.
+
 ## Audio reactivity
 
 If the video has an audio track, flip on **Audio reactivity**. The soundtrack is split into 8 sources:
@@ -87,6 +99,7 @@ js/cut/main.js      Beat Cut: clips, clock, compositing, timeline, export
 js/cut/beat.js      Tempo and beat-phase detection, tap tempo
 js/cut/schedule.js  Seeded cut-list generator
 css/style.css       Styles
+js/global.js        Global Effects grading stage
 js/main.js          App wiring: upload, playback loop, gallery, params, export
 js/gl.js            WebGL2 core: shaders, render targets, ping-pong buffers, shared GLSL
 js/audio.js         Web Audio analysis, EQ bands, transient detection
