@@ -174,3 +174,10 @@ input[type="range"]:disabled { opacity: 0.4; cursor: not-allowed; }
 #export-note { margin-top: 10px; line-height: 1.45; }
 #download-again { color: var(--accent-2); cursor: pointer; display: inline-block; margin-top: 6px; }
 body.exporting .gallery, body.exporting .transport { opacity: 0.4; pointer-events: none; }
+
+/* Tool switcher (shared by both pages) */
+.modes { display: inline-flex; gap: 4px; padding: 4px; border: 1px solid var(--line); border-radius: 12px; background: var(--panel); }
+.modes a { text-decoration: none; color: var(--muted); font-size: 13px; font-weight: 700; padding: 7px 14px; border-radius: 9px; }
+.modes a.on { background: var(--panel-2); color: var(--text); }
+.modes a:hover { color: var(--text); }
+

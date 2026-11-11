@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Beat Cut · Moshpit</title>
+  <meta name="description" content="Cut up to five clips together on the beat. Set a BPM or detect it, choose how often to switch, randomize, overlap, and render. Runs in your browser.">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 32 32%27%3E%3Crect width=%2732%27 height=%2732%27 rx=%278%27 fill=%27%23ff4fa3%27/%3E%3Crect x=%278%27 y=%278%27 width=%2716%27 height=%2716%27 rx=%273%27 fill=%27%2353f0ff%27/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="css/cut.css">
+</head>
+<body class="cut-page">
+  <header class="topbar">
+    <div class="brand">
+      <span class="logo" aria-hidden="true"></span>
+      <div>
+        <h1>MOSHPIT</h1>
+        <p>Beat Cut: up to 5 clips, edited to the beat.</p>
+      </div>
+    </div>
+    <nav class="modes" aria-label="Tools">
+      <a href="index.html">Effects</a>
+      <a href="cut.html" class="on" aria-current="page">Beat Cut</a>
+    </nav>
+    <div class="top-actions">
+      <label class="btn btn-primary" for="clip-input">Add clips</label>
+      <input id="clip-input" type="file" accept="video/*" multiple hidden>
+    </div>
+  </header>
+
+  <main class="layout">
+    <section class="stage">
+      <div class="viewer" id="viewer">
+        <canvas id="cut-canvas" width="1280" height="720"></canvas>
+        <div class="dropzone" id="dropzone">
+          <div class="dz-inner">
+            <div class="dz-icon" aria-hidden="true"></div>
+            <h2>Drop up to 5 clips</h2>
+            <p>Then set a BPM or let it detect the beat from your soundtrack, pick how often to cut, and render.</p>
+            <label class="btn btn-primary" for="clip-input">Choose clips</label>
+          </div>
+        </div>
+        <button class="play-overlay" id="play-overlay" hidden>Click to start preview</button>
+        <div class="viewer-badge" id="beat-badge">120 BPM</div>
+        <div class="beat-dots" id="beat-dots"><i></i><i></i><i></i><i></i></div>
+        <div class="render-overlay" id="render-overlay" hidden>
+          <div class="render-card">
+            <div class="render-title">Rendering <span id="render-pct">0%</span></div>
+            <div class="progress"><div class="progress-fill" id="render-fill"></div></div>
+            <div class="render-sub" id="render-sub">Keep this tab visible while it renders.</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="transport">
+        <button class="icon-btn" id="play-btn" title="Play / pause (space)" disabled>
+          <svg viewBox="0 0 24 24" class="i-pause"><path d="M7 5h3v14H7zM14 5h3v14h-3z"/></svg>
+          <svg viewBox="0 0 24 24" class="i-play"><path d="M8 5l11 7-11 7z"/></svg>
+        </button>
+        <div class="timecode" id="timecode">0:00.0 / 0:00.0</div>
+        <div class="section-ctl">
+          <label>Start <input type="number" id="sec-start" min="0" step="0.1" value="0"></label>
+          <label>End <input type="number" id="sec-end" min="0" step="0.1" value="0"></label>
+          <span class="muted small" id="sec-len"></span>
+        </div>
+        <label class="check"><input type="checkbox" id="click-toggle"> Click track</label>
+        <div class="vol">
+          <button class="icon-btn" id="mute-btn" title="Mute monitor">
+            <svg viewBox="0 0 24 24"><path d="M4 9h4l5-4v14l-5-4H4z"/><path class="wave" d="M16 8.5a5 5 0 0 1 0 7M18.5 6a8.5 8.5 0 0 1 0 12" fill="none" stroke="currentColor" stroke-width="2"/></svg>
+          </button>
+          <input type="range" id="volume" min="0" max="1" step="0.01" value="0.8" aria-label="Monitor volume">
+        </div>
+      </div>
+
+      <div class="timeline-wrap">
+        <canvas id="timeline" height="76"></canvas>
+      </div>
+      <p class="hint">Each block is a cut, colored by clip. Ticks are beats (tall ones every 4). Click the timeline to jump; the shaded area is outside the render section.</p>
+
+      <div class="gallery-head">
+        <h2>Clips</h2>
+        <p>Up to 5. Untick a clip to leave it out of the rotation.</p>
+      </div>
+      <div class="slots" id="slots"></div>
+    </section>
+
+    <aside class="panel">
+      <section class="block">
+        <div class="block-head"><div><h2>Soundtrack &amp; tempo</h2><p class="muted" id="tempo-status">Set a BPM, tap it, or detect it from the soundtrack.</p></div></div>
+        <div class="field">
+          <label for="soundtrack">Soundtrack</label>
+          <div class="row">
+            <select id="soundtrack"><option value="none">None (silent)</option></select>
+            <label class="btn btn-ghost btn-sm" for="song-input" title="Use a separate song">Song file</label>
+            <input id="song-input" type="file" accept="audio/*,video/*" hidden>
+          </div>
+        </div>
+        <div class="tempo-row">
+          <div class="field bpm-field">
+            <label for="bpm">BPM</label>
+            <input type="number" id="bpm" min="40" max="300" step="0.1" value="120">
+          </div>
+          <button class="btn btn-sm" id="half-btn" title="Half time">÷2</button>
+          <button class="btn btn-sm" id="double-btn" title="Double time">×2</button>
+          <button class="btn btn-sm" id="tap-btn" title="Tap along to the beat">Tap</button>
+        </div>
+        <button class="btn btn-block" id="detect-btn" disabled>Detect beat from soundtrack</button>
+        <div class="param">
+          <div class="param-head"><span class="param-label">Beat offset</span><span class="param-val" id="offset-val">0 ms</span></div>
+          <input type="range" id="offset" min="0" max="1" step="0.005" value="0">
+        </div>
+      </section>
+
+      <section class="block">
+        <div class="block-head"><div><h2>Cuts</h2><p class="muted">How often to switch, and how predictable it is.</p></div>
+          <button class="btn btn-ghost btn-sm" id="reshuffle-btn" title="New random pattern">Reshuffle</button></div>
+        <div class="field">
+          <label>Switch every (beats)</label>
+          <div class="seg seg-wide" id="every">
+            <button class="seg-btn" data-v="0.25">1/4</button>
+            <button class="seg-btn" data-v="0.5">1/2</button>
+            <button class="seg-btn is-on" data-v="1">1</button>
+            <button class="seg-btn" data-v="2">2</button>
+            <button class="seg-btn" data-v="4">4</button>
+            <button class="seg-btn" data-v="8">8</button>
+          </div>
+        </div>
+        <div class="param">
+          <div class="param-head"><span class="param-label">Randomize timing</span><span class="param-val" id="random-val">0%</span></div>
+          <input type="range" id="randomness" min="0" max="1" step="0.01" value="0">
+        </div>
+        <div class="two">
+          <label class="field">Clip order
+            <select id="order">
+              <option value="sequential">In order</option>
+              <option value="random" selected>Random</option>
+              <option value="pingpong">Ping-pong</option>
+            </select>
+          </label>
+          <label class="field">On each cut
+            <select id="jump">
+              <option value="continuous">Keep rolling</option>
+              <option value="jump" selected>Random spot</option>
+            </select>
+          </label>
+        </div>
+      </section>
+
+      <section class="block">
+        <div class="block-head"><div><h2>Look</h2><p class="muted">Overlap lets old clips bleed through the new one.</p></div></div>
+        <div class="param">
+          <div class="param-head"><span class="param-label">Overlap</span><span class="param-val" id="overlap-val">0%</span></div>
+          <input type="range" id="overlap" min="0" max="1" step="0.01" value="0">
+        </div>
+        <div class="two">
+          <label class="field">Overlap blend
+            <select id="blend">
+              <option value="0">Normal</option>
+              <option value="1" selected>Screen</option>
+              <option value="2">Add</option>
+              <option value="3">Difference</option>
+              <option value="4">Multiply</option>
+            </select>
+          </label>
+          <label class="field">Frame
+            <select id="aspect">
+              <option value="auto">Match first clip</option>
+              <option value="1.7778">16:9</option>
+              <option value="0.5625">9:16 (Reels)</option>
+              <option value="1">1:1</option>
+              <option value="0.8">4:5</option>
+            </select>
+          </label>
+        </div>
+        <div class="param">
+          <div class="param-head"><span class="param-label">Punch zoom on cut</span><span class="param-val" id="punch-val">0%</span></div>
+          <input type="range" id="punch" min="0" max="1" step="0.01" value="0">
+        </div>
+        <div class="param">
+          <div class="param-head"><span class="param-label">Flash on cut</span><span class="param-val" id="flash-val">0%</span></div>
+          <input type="range" id="flash" min="0" max="1" step="0.01" value="0">
+        </div>
+      </section>
+
+      <section class="block">
+        <div class="block-head"><div><h2>Render</h2><p class="muted">Renders the section in real time, then downloads.</p></div></div>
+        <div class="export-grid">
+          <label>Resolution
+            <select id="ex-res"><option value="1080">1080p</option><option value="720" selected>720p</option><option value="480">480p</option></select>
+          </label>
+          <label>Frame rate
+            <select id="ex-fps"><option value="30" selected>30 fps</option><option value="60">60 fps</option></select>
+          </label>
+          <label>Quality
+            <select id="ex-quality"><option value="high" selected>High</option><option value="medium">Medium</option><option value="low">Small file</option></select>
+          </label>
+          <label>Format
+            <select id="ex-format"><option value="auto" selected>Auto (MP4 when supported)</option><option value="webm">WebM</option></select>
+          </label>
+        </div>
+        <button class="btn btn-primary btn-block" id="export-btn" disabled>Process &amp; download</button>
+        <button class="btn btn-ghost btn-block" id="cancel-btn" hidden>Cancel render</button>
+        <p class="muted small" id="export-note"></p>
+        <a id="download-again" class="small" hidden>Download again</a>
+      </section>
+    </aside>
+  </main>
+
+  <audio id="soundtrack-el" preload="auto"></audio>
+  <script type="module" src="js/cut/main.js"></script>
+</body>
+</html>

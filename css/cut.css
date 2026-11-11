@@ -1,0 +1,56 @@
+/* Viewer extras */
+.cut-page #cut-canvas { width: 100%; height: 100%; object-fit: contain; display: block; }
+.beat-dots { position: absolute; right: 14px; top: 14px; display: flex; gap: 6px; padding: 8px 10px; border-radius: 99px; background: rgba(0, 0, 0, 0.55); }
+.beat-dots i { width: 9px; height: 9px; border-radius: 50%; background: #4a403d; transition: background 0.05s; }
+.beat-dots i.on { background: var(--accent-2); box-shadow: 0 0 8px var(--accent-2); }
+.beat-dots i.on:first-child { background: var(--accent); box-shadow: 0 0 8px var(--accent); }
+.viewer:not(.has-video) .beat-dots { display: none; }
+
+/* Transport */
+.timecode { font-family: var(--mono); font-size: 13px; min-width: 130px; }
+.section-ctl { display: flex; align-items: center; gap: 10px; flex: 1; min-width: 240px; }
+.section-ctl label { font-size: 12px; color: var(--muted); display: flex; align-items: center; gap: 6px; }
+.section-ctl input, .bpm-field input { width: 80px; background: var(--panel-2); border: 1px solid var(--line); border-radius: 9px; padding: 7px 9px; font-family: var(--mono); font-size: 13px; }
+.transport .check { grid-column: auto; }
+
+/* Timeline */
+.timeline-wrap { margin-top: 14px; border: 1px solid var(--line); border-radius: 14px; overflow: hidden; background: #0d0b0b; }
+#timeline { display: block; width: 100%; height: 76px; cursor: pointer; }
+
+/* Clip slots */
+.slots { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 14px; }
+@media (max-width: 1300px) { .slots { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@media (max-width: 700px) { .slots { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.slot { position: relative; border: 1px solid var(--line); border-radius: 16px; background: var(--panel); overflow: hidden; display: grid; grid-template-rows: auto 1fr; transition: border-color 0.1s, box-shadow 0.1s; }
+.slot.active { border-color: var(--clip); box-shadow: 0 0 0 2px var(--clip); }
+.slot.off { opacity: 0.55; }
+.slot-thumb { position: relative; aspect-ratio: 16 / 10; background: #0d0b0b; }
+.slot-thumb canvas { width: 100%; height: 100%; object-fit: cover; display: block; }
+.slot-num { position: absolute; left: 10px; top: 10px; width: 24px; height: 24px; border-radius: 8px; background: var(--clip); color: #111; font-weight: 800; font-size: 12px; display: grid; place-items: center; }
+.slot-remove { position: absolute; right: 8px; top: 8px; width: 26px; height: 26px; border-radius: 8px; border: 0; background: rgba(0, 0, 0, 0.6); color: #fff; cursor: pointer; font-size: 15px; line-height: 1; }
+.slot-body { padding: 10px 12px 12px; display: grid; gap: 8px; }
+.slot-name { font-size: 12.5px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.slot-meta { display: flex; justify-content: space-between; align-items: center; font-size: 11px; color: var(--muted); }
+.slot-meta label { display: flex; align-items: center; gap: 5px; cursor: pointer; }
+.slot-meta input { accent-color: var(--clip); }
+.slot-op { display: flex; justify-content: space-between; font-size: 11px; color: var(--muted); }
+.slot-op span:last-child { font-family: var(--mono); color: var(--text); }
+.slot.empty { border-style: dashed; place-items: center; min-height: 180px; cursor: pointer; color: var(--muted); font-size: 13px; grid-template-rows: 1fr; text-align: center; }
+.slot.empty:hover { border-color: #6a5d58; color: var(--text); }
+.slot.empty b { display: block; font-size: 26px; font-weight: 300; margin-bottom: 4px; }
+
+/* Panel fields */
+.field { display: grid; gap: 6px; font-size: 12px; color: var(--muted); margin-bottom: 12px; }
+.field select { width: 100%; background: var(--panel-2); border: 1px solid var(--line); border-radius: 9px; padding: 8px 10px; font-size: 13px; color: var(--text); }
+.row { display: flex; gap: 8px; align-items: center; }
+.row select { flex: 1; }
+.tempo-row { display: flex; gap: 8px; align-items: flex-end; }
+.tempo-row .field { margin: 0; flex: 1; }
+.bpm-field input { width: 100%; font-size: 18px; padding: 6px 10px; }
+.tempo-row .btn { height: 38px; }
+#tap-btn.flash { background: var(--accent-2); color: #071012; }
+.two { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.two .field { margin-bottom: 4px; }
+.seg-wide { display: flex; width: 100%; }
+.seg-wide .seg-btn { flex: 1; }
+.block .param { margin: 12px 0; }

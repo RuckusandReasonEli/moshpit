@@ -2,6 +2,21 @@
 
 In-browser video effects. Upload a clip, watch every effect preview live on a 3 second loop of your footage, link any parameter to the soundtrack's EQ, then render the full video and it downloads automatically. Nothing is uploaded to a server: decoding, effects (WebGL2 shaders) and encoding (MediaRecorder) all happen on the user's machine.
 
+Two tools, switchable from the header:
+
+- **Effects** (`index.html`): one clip through glitch, mosh and feedback effects, with audio-reactive EQ linking.
+- **Beat Cut** (`cut.html`): up to 5 clips edited together on the beat.
+
+## Beat Cut
+
+1. Add up to 5 clips. Pick a soundtrack: any clip's audio, a separate song file (MP3, WAV, M4A, or a video), or none.
+2. Set the tempo: type a BPM, tap along, or press **Detect beat from soundtrack** (finds the BPM and where the first beat lands). Use ÷2 / ×2 for half or double time and **Beat offset** to nudge the grid. Turn on **Click track** to hear the grid while previewing.
+3. **Switch every** 1/4, 1/2, 1, 2, 4 or 8 beats. **Randomize timing** varies individual cut lengths (half, double, dotted and so on) while staying on the quarter-beat grid; **Reshuffle** rolls a new pattern.
+4. **Clip order**: in order, random (never the same clip twice in a row) or ping-pong. **On each cut**: keep each clip rolling, or jump to a random spot in it.
+5. **Overlap** keeps previous clips bleeding through the new one for up to 4 beats, using the **Overlap blend** mode (Screen, Add, Difference and Multiply get aggressive). Each clip has its own **Opacity**. Optional **Punch zoom** and **Flash** hit on every cut.
+6. **Frame**: match the first clip, 16:9, 9:16 for Reels, 1:1 or 4:5. Clips are cropped to fill.
+7. Set the **Start / End** section (cuts stay locked to the song's beat grid), then **Process & download**.
+
 ## Effects
 
 | Effect | What it does |
@@ -58,7 +73,12 @@ python3 -m http.server 8000
 ## Project layout
 
 ```
-index.html          UI markup
+index.html          Effects tool
+cut.html            Beat Cut tool
+css/cut.css         Beat Cut styles
+js/cut/main.js      Beat Cut: clips, clock, compositing, timeline, export
+js/cut/beat.js      Tempo and beat-phase detection, tap tempo
+js/cut/schedule.js  Seeded cut-list generator
 css/style.css       Styles
 js/main.js          App wiring: upload, playback loop, gallery, params, export
 js/gl.js            WebGL2 core: shaders, render targets, ping-pong buffers, shared GLSL
