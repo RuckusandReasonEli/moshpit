@@ -84,7 +84,7 @@ const mainInst = new Map(), galInst = new Map();
 
 /* ---------- Tracking (face / hands / body) ---------- */
 const tracker = new Tracker();
-window.moshpitTracker = tracker; // handy for debugging in the console
+window.videoPortalTracker = tracker; // handy for debugging in the console
 let lastTrack = { faces: [], hands: [], poses: [], fresh: false };
 let rawTrack = { faces: [], hands: [], poses: [] };
 function neededKinds() {

@@ -1,4 +1,6 @@
-# Moshpit
+# Ruckus & Reason Video Portal
+
+Live at https://ruckusandreasoneli.github.io/moshpit/
 
 In-browser video effects. Upload a clip, watch every effect preview live on a 3 second loop of your footage, link any parameter to the soundtrack's EQ, then render the full video and it downloads automatically. Nothing is uploaded to a server: decoding, effects (WebGL2 shaders) and encoding (MediaRecorder) all happen on the user's machine.
 
@@ -82,7 +84,7 @@ Or from a terminal:
 
 ```bash
 cd moshpit
-git init && git add . && git commit -m "Moshpit"
+git init && git add . && git commit -m "Ruckus & Reason Video Portal"
 git branch -M main
 git remote add origin https://github.com/YOUR-USERNAME/moshpit.git
 git push -u origin main

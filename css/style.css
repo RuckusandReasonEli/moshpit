@@ -251,3 +251,14 @@ body.exporting .gallery, body.exporting .transport { opacity: 0.4; pointer-event
   .render-jump:not([hidden]) { display: block; position: fixed; right: 14px; bottom: calc(14px + env(safe-area-inset-bottom)); z-index: 20; padding: 12px 18px; border-radius: 999px; background: var(--accent); color: #1a0710; font-weight: 800; text-decoration: none; box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45); }
   body.exporting .render-jump { display: none; }
 }
+
+/* App name: two-line wordmark */
+.app-name { display: grid; line-height: 1.05; }
+.app-name .n1 { font-size: 18px; font-weight: 800; letter-spacing: 0.14em; }
+.app-name .n2 { font-size: 11px; font-weight: 800; letter-spacing: 0.42em; color: var(--accent); margin-top: 3px; }
+.brand h1.app-name { font-size: inherit; letter-spacing: normal; }
+@media (max-width: 760px) {
+  .app-name .n1 { font-size: 14px; letter-spacing: 0.1em; }
+  .app-name .n2 { font-size: 9.5px; letter-spacing: 0.34em; }
+}
+.brand .app-name + p { margin-top: 5px; }
