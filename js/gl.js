@@ -143,10 +143,11 @@ function setUniform(gl, loc, v, type) {
 }
 
 export class Renderer {
-  constructor(canvas) {
+  constructor(canvas, { preserve = false } = {}) {
     const gl = canvas.getContext('webgl2', {
       alpha: false, antialias: false, depth: false, stencil: false,
-      premultipliedAlpha: false, preserveDrawingBuffer: false, powerPreference: 'high-performance',
+      // Safari can record blank frames from a WebGL canvas unless the buffer is preserved.
+      premultipliedAlpha: false, preserveDrawingBuffer: preserve, powerPreference: 'high-performance',
     });
     if (!gl) throw new Error('WebGL2 is not available in this browser.');
     this.gl = gl;

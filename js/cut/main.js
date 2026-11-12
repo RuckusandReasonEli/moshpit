@@ -1,5 +1,6 @@
 import { Renderer, FS_IO } from '../gl.js';
-import { pickMime, bitrateFor, downloadBlob } from '../export.js';
+import { pickMime, bitrateFor, presentResult } from '../export.js';
+import { IS_IOS, IS_MOBILE, keepAwake, waitForMetadata, usePlaybackAudioSession } from '../mobile.js';
 import { buildSchedule, findSegment } from './schedule.js';
 import { detectBeats, TapTempo } from './beat.js';
 
@@ -10,7 +11,7 @@ const setFill = el => el.style.setProperty('--fill', ((el.value - el.min) / (el.
 
 const MAX_CLIPS = 5;
 const COLORS = ['#ff4fa3', '#53f0ff', '#ffb14f', '#9dff7a', '#a98bff'];
-const PREVIEW_LONG = 960;
+const PREVIEW_LONG = IS_MOBILE ? 720 : 960;
 
 /* ---------- State ---------- */
 const S = {
@@ -28,7 +29,7 @@ const offsetSec = () => S.offsetFrac * beatLen();
 
 /* ---------- GL ---------- */
 const canvas = $('#cut-canvas');
-const r = new Renderer(canvas);
+const r = new Renderer(canvas, { preserve: IS_IOS });
 const gl = r.gl;
 const COMP_FS = FS_IO + /* glsl */ `
 uniform sampler2D uAccum, uLayer;
@@ -93,6 +94,7 @@ let actx = null, monitor = null, recordDest = null, bus = null;
 // or song) and, in the mix modes, a gain per clip driven by the edit.
 function ensureAudio() {
   if (actx) return;
+  usePlaybackAudioSession();
   actx = new (window.AudioContext || window.webkitAudioContext)();
   bus = actx.createGain();
   monitor = actx.createGain();
@@ -133,11 +135,15 @@ const master = {
   get audio() { return usesElement() && audioEl.readyState >= 1; },
   now() { return this.audio ? audioEl.currentTime : (silent.playing ? silent.base + (performance.now() - silent.t0) / 1000 : silent.base); },
   get playing() { return this.audio ? !audioEl.paused : silent.playing; },
+  // Everything that starts media happens synchronously first, inside the tap
+  // (iOS only allows playback that starts in the gesture itself).
   async play() {
-    ensureAudio(); await resumeAudio();
-    if (this.audio) await audioEl.play();
-    else if (!silent.playing) { silent.t0 = performance.now(); silent.playing = true; }
+    ensureAudio();
     syncClips(this.now(), true);
+    const started = this.audio ? audioEl.play() : null;
+    if (!this.audio && !silent.playing) { silent.t0 = performance.now(); silent.playing = true; }
+    resumeAudio();
+    if (started) await started;
   },
   pause() {
     if (this.audio) audioEl.pause();
@@ -171,7 +177,8 @@ async function addClip(file) {
   video.setAttribute('playsinline', '');
   videoBox.appendChild(video);
   try {
-    await new Promise((res, rej) => { video.onloadeddata = res; video.onerror = () => rej(new Error(file.name)); });
+    await waitForMetadata(video); // iOS won't fire loadeddata until playback starts
+    video.play().catch(() => {});  // muted clips may start without a tap; frames arrive once it does
   } catch (e) {
     alert(`This browser can't decode ${file.name}. Try an H.264 MP4 or WebM.`);
     video.remove(); URL.revokeObjectURL(url);
@@ -208,6 +215,7 @@ function removeClip(i) {
 function afterClipsChanged() {
   const has = clips.length > 0;
   $('#viewer').classList.toggle('has-video', has);
+  $('#render-jump').hidden = !has;
   $('#play-btn').disabled = !has;
   $('#export-btn').disabled = !has;
   if (!exportJob) resizeTo(...sizeFor(0, PREVIEW_LONG));
@@ -313,7 +321,7 @@ async function setSoundtrack(v) {
   renderSoundtrackOptions();
   updateTotal(true);
   master.seek(S.secStart);
-  if (wasPlaying) master.play();
+  if (wasPlaying) master.play().then(() => { $('#play-overlay').hidden = true; }).catch(() => { $('#play-overlay').hidden = false; syncPlay(); });
 }
 stSel.onchange = () => setSoundtrack(stSel.value);
 $('#song-input').onchange = e => {
@@ -449,6 +457,12 @@ $('#tap-btn').onclick = e => {
 $('#detect-btn').onclick = async () => {
   const f = soundtrackFile();
   if (!f) return;
+  // Detection decodes the whole file into memory; phones can't hold a huge video's audio.
+  const limit = IS_MOBILE ? 250e6 : 1500e6;
+  if (f.size > limit) {
+    $('#tempo-status').textContent = `That file is ${(f.size / 1e6).toFixed(0)} MB, too large to analyze on this device. Tap the tempo, type it, or use a song file.`;
+    return;
+  }
   const btn = $('#detect-btn');
   btn.disabled = true; btn.textContent = 'Listening...';
   $('#tempo-status').textContent = 'Analyzing the soundtrack. Long songs take a few seconds.';
@@ -599,7 +613,7 @@ function updateMix(layers) {
   }
 }
 
-audioEl.addEventListener('ended', () => { if (!exportJob) { master.seek(S.secStart); master.play(); } });
+audioEl.addEventListener('ended', () => { if (!exportJob) { master.seek(S.secStart); master.play().catch(() => {}); } });
 
 /* ---------- Main loop ---------- */
 const dots = [...document.querySelectorAll('#beat-dots i')];
@@ -641,6 +655,10 @@ cancelBtn.onclick = () => finishExport(true);
 
 async function startExport() {
   if (!clips.length || exportJob) return;
+  // Unlock media inside this tap (iOS), since playback starts after a short delay below.
+  ensureAudio(); resumeAudio();
+  clips.forEach(c => c.video.play().catch(() => {}));
+  if (master.audio && audioEl.paused) audioEl.play().then(() => { if (!exportJob || exportJob.finishing) audioEl.pause(); }).catch(() => {});
   if (typeof MediaRecorder === 'undefined') { alert('This browser does not support MediaRecorder, which is needed to render video.'); return; }
   const mime = pickMime($('#ex-format').value);
   if (!mime) { alert('No supported recording format found in this browser.'); return; }
@@ -666,10 +684,11 @@ async function startExport() {
   rec.ondataavailable = e => { if (e.data && e.data.size) chunks.push(e.data); };
   const stopped = new Promise(res => { rec.onstop = res; });
   exportJob = { rec, chunks, stopped, vtrack, manual, fps, w, h, mime, start: S.secStart, end: S.secEnd, lastFrameT: -1, finishing: false };
+  keepAwake().then(lock => { if (exportJob) exportJob.wake = lock; else if (lock) lock.release(); });
   document.body.classList.add('exporting');
   exportBtn.hidden = true; cancelBtn.hidden = false;
   $('#render-overlay').hidden = false;
-  $('#download-again').hidden = true;
+  $('#result').hidden = true;
   note.textContent = `${w}x${h} at ${fps} fps, ${mime.split(';')[0].replace('video/', '').toUpperCase()}${withAudio ? audioLabel : ', silent'}. Overlap, punch and flash can still be tweaked live.`;
   rec.start(1000);
   try { await master.play(); } catch (e) { finishExport(true); alert('Playback was blocked. Click anywhere on the page and try again.'); }
@@ -697,6 +716,7 @@ async function finishExport(cancelled) {
   if (job.rec.state !== 'inactive') job.rec.stop();
   await job.stopped;
   job.vtrack.stop();
+  if (job.wake) job.wake.release().catch(() => {});
   exportJob = null;
   document.body.classList.remove('exporting');
   exportBtn.hidden = false; cancelBtn.hidden = true;
@@ -708,11 +728,8 @@ async function finishExport(cancelled) {
     const blob = new Blob(job.chunks, { type });
     const name = `beatcut_${Math.round(S.bpm)}bpm_${job.w}x${job.h}.${ext}`;
     if (lastDownload) URL.revokeObjectURL(lastDownload);
-    lastDownload = downloadBlob(blob, name);
-    const again = $('#download-again');
-    again.href = lastDownload; again.download = name; again.hidden = false;
-    again.textContent = `Download again (${(blob.size / 1e6).toFixed(1)} MB)`;
-    note.textContent = `Saved ${name}.`;
+    lastDownload = presentResult(blob, name, $('#result'));
+    note.textContent = IS_IOS ? `Ready: ${name}. Tap ${$('#result button') ? 'Save video' : 'Download'} to keep it.` : `Saved ${name}.`;
   } else note.textContent = cancelled ? 'Render cancelled.' : 'Nothing was recorded. Try again with the tab in the foreground.';
   resizeTo(...sizeFor(0, PREVIEW_LONG));
   master.seek(S.secStart);

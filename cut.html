@@ -35,12 +35,12 @@
         <div class="dropzone" id="dropzone">
           <div class="dz-inner">
             <div class="dz-icon" aria-hidden="true"></div>
-            <h2>Drop up to 5 clips</h2>
+            <h2><span class="desk">Drop up to 5 clips</span><span class="touch">Choose up to 5 clips</span></h2>
             <p>Then set a BPM or let it detect the beat from your soundtrack, pick how often to cut, and render.</p>
             <label class="btn btn-primary" for="clip-input">Choose clips</label>
           </div>
         </div>
-        <button class="play-overlay" id="play-overlay" hidden>Click to start preview</button>
+        <button class="play-overlay" id="play-overlay" hidden>Tap to start preview</button>
         <div class="viewer-badge" id="beat-badge">120 BPM</div>
         <div class="beat-dots" id="beat-dots"><i></i><i></i><i></i><i></i></div>
         <div class="render-overlay" id="render-overlay" hidden>
@@ -75,7 +75,7 @@
       <div class="timeline-wrap">
         <canvas id="timeline" height="76"></canvas>
       </div>
-      <p class="hint">Each block is a cut, colored by clip. Ticks are beats (tall ones every 4). Click the timeline to jump; the shaded area is outside the render section.</p>
+      <p class="hint">Each block is a cut, colored by clip. Ticks are beats (tall ones every 4). Tap or click the timeline to jump; the shaded area is outside the render section.</p>
 
       <div class="gallery-head">
         <h2>Clips</h2>
@@ -182,7 +182,7 @@
         </div>
       </section>
 
-      <section class="block">
+      <section class="block" id="render-block">
         <div class="block-head"><div><h2>Render</h2><p class="muted">Renders the section in real time, then downloads.</p></div></div>
         <div class="export-grid">
           <label>Resolution
@@ -201,12 +201,13 @@
         <button class="btn btn-primary btn-block" id="export-btn" disabled>Process &amp; download</button>
         <button class="btn btn-ghost btn-block" id="cancel-btn" hidden>Cancel render</button>
         <p class="muted small" id="export-note"></p>
-        <a id="download-again" class="small" hidden>Download again</a>
+        <div id="result" class="result" hidden></div>
       </section>
     </aside>
   </main>
 
   <audio id="soundtrack-el" preload="auto"></audio>
+  <a class="render-jump" id="render-jump" href="#render-block" hidden>Render</a>
   <script type="module" src="js/cut/main.js"></script>
 </body>
 </html>

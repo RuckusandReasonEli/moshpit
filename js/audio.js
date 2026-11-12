@@ -1,3 +1,5 @@
+import { usePlaybackAudioSession } from './mobile.js';
+
 // Audio analysis: splits the video's soundtrack into EQ bands that any effect
 // parameter can be linked to, plus a "Bass Hit" transient trigger.
 
@@ -31,6 +33,7 @@ export class AudioEngine {
 
   attach(video) {
     if (this.ctx) return;
+    usePlaybackAudioSession();
     const AC = window.AudioContext || window.webkitAudioContext;
     this.ctx = new AC();
     const ctx = this.ctx;

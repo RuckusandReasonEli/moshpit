@@ -35,12 +35,13 @@
         <div class="dropzone" id="dropzone">
           <div class="dz-inner">
             <div class="dz-icon" aria-hidden="true"></div>
-            <h2>Drop a video to start</h2>
+            <h2><span class="desk">Drop a video to start</span><span class="touch">Choose a video to start</span></h2>
             <p>MP4, MOV or WebM. Every effect previews a 3 second loop of your clip. Pick one, tune it, then render the full video.</p>
             <label class="btn btn-primary" for="file-input">Choose a file</label>
           </div>
         </div>
-        <button class="play-overlay" id="play-overlay" hidden>Click to start preview</button>
+        <button class="play-overlay" id="play-overlay" hidden>Tap to start preview</button>
+        <button class="sound-pill" id="sound-btn" hidden>Tap for sound</button>
         <div class="viewer-badge" id="effect-badge"></div>
         <div class="render-overlay" id="render-overlay" hidden>
           <div class="render-card">
@@ -80,7 +81,7 @@
 
       <div class="gallery-head">
         <h2>Effects</h2>
-        <p>Live 3 second previews. Click one to edit.</p>
+        <p>Live 3 second previews. Choose one to edit.</p>
       </div>
       <div class="gallery" id="gallery"></div>
     </section>
@@ -182,12 +183,13 @@
         <button class="btn btn-primary btn-block" id="export-btn" disabled>Process &amp; download</button>
         <button class="btn btn-ghost btn-block" id="cancel-btn" hidden>Cancel render</button>
         <p class="muted small" id="export-note"></p>
-        <a id="download-again" class="small" hidden>Download again</a>
+        <div id="result" class="result" hidden></div>
       </section>
     </aside>
   </main>
 
   <video id="video" playsinline preload="auto"></video>
+  <a class="render-jump" id="render-jump" href="#export-block" hidden>Render</a>
   <script type="module" src="js/main.js"></script>
 </body>
 </html>

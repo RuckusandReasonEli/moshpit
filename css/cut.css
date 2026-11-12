@@ -58,3 +58,13 @@
 /* Per-clip volume only matters when clip audio is mixed */
 .slot-vol { display: none; }
 body.mix-audio .slot-vol { display: block; }
+
+@media (max-width: 760px) {
+  .timecode { min-width: 0; font-size: 12px; }
+  .section-ctl { order: 5; flex-basis: 100%; flex-wrap: wrap; min-width: 0; }
+  .section-ctl input { width: 90px; }
+  .two { grid-template-columns: 1fr; }
+  .slot-thumb { aspect-ratio: 16 / 11; }
+  .tempo-row .btn { height: 44px; min-width: 44px; }
+  .bpm-field input { font-size: 18px; }
+}

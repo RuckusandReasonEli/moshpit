@@ -109,6 +109,7 @@ js/cut/schedule.js  Seeded cut-list generator
 css/style.css       Styles
 js/global.js        Global Effects grading stage
 js/detect.js        Shared MediaPipe face/hand/pose tracker
+js/mobile.js        Phone helpers (iOS playback rules, wake lock, audio session)
 vendor/mediapipe/   MediaPipe Tasks Vision 1.2.2 (Apache-2.0)
 js/main.js          App wiring: upload, playback loop, gallery, params, export
 js/gl.js            WebGL2 core: shaders, render targets, ping-pong buffers, shared GLSL
@@ -155,6 +156,15 @@ export default {
 Then add it to the array in `js/effects/index.js`. It appears in the gallery with sliders, EQ linking and export automatically.
 
 Useful pieces available to every shader: `uRes`, `uTime` (video time), `uFrame`, `uScale` (render height / 720, for resolution-independent pixel sizes), and helpers `luma`, `hash11`, `hash12`, `hash22`, `noise`, `hueShift`, `rgb2hsv`, `hsv2rgb`. For effects that need the previous frame, use `r.prev`, and use `this.pp(...)` plus `this.present(...)` for feedback buffers (see `feedback.js`). Optical flow is available via `FLOW_GLSL`.
+
+## On phones (iPhone and Android)
+
+- iPhone only allows sound when playback starts from a tap, so a clip may start muted with a **Tap for sound** button; any tap turns sound on. Renders always include the audio.
+- When a render finishes on iPhone, tap **Save video** to open the share sheet (Save Video puts it in Photos), or **Download** to save it to Files. Desktop browsers still download automatically.
+- The screen is kept awake while rendering (where the browser supports it). Keep Safari in the foreground until it finishes.
+- Previews run at lower resolution on phones to stay smooth; renders use the resolution you pick. 720p is the safest choice on older phones.
+- Beat detection on a phone is limited to files up to about 250 MB (it decodes the whole soundtrack into memory). For bigger clips, tap the tempo or use a song file.
+- Audio plays even with the silent switch on (iOS 16.4 and later).
 
 ## Browser support
 

@@ -1,4 +1,5 @@
-// Recording helpers for MediaRecorder output.
+// Recording helpers for MediaRecorder output, and handing the result to the user.
+import { IS_IOS } from './mobile.js';
 
 const MP4 = [
   'video/mp4;codecs=avc1.640028,mp4a.40.2',
@@ -28,5 +29,36 @@ export function downloadBlob(blob, name) {
   document.body.appendChild(a);
   a.click();
   a.remove();
+  return url;
+}
+
+/**
+ * Show the finished video. Desktop downloads automatically. Phones get a
+ * "Save video" button (share sheet, which on iPhone includes Save to Photos),
+ * because iOS ignores downloads that don't come straight from a tap.
+ * Returns the object URL so the caller can revoke it later.
+ */
+export function presentResult(blob, name, container) {
+  const url = URL.createObjectURL(blob);
+  const file = new File([blob], name, { type: blob.type });
+  const mb = (blob.size / 1e6).toFixed(1);
+  container.innerHTML = '';
+  let canShare = false;
+  try { canShare = !!(navigator.canShare && navigator.canShare({ files: [file] })); } catch (e) { canShare = false; }
+  if (canShare) {
+    const btn = document.createElement('button');
+    btn.className = 'btn btn-primary btn-block';
+    btn.textContent = IS_IOS ? 'Save video (Photos, Files, AirDrop)' : 'Share or save video';
+    btn.onclick = () => navigator.share({ files: [file], title: name }).catch(() => {});
+    container.appendChild(btn);
+  }
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = name;
+  a.className = 'btn btn-ghost btn-block';
+  a.textContent = `Download ${name.split('.').pop().toUpperCase()} (${mb} MB)`;
+  container.appendChild(a);
+  container.hidden = false;
+  if (!IS_IOS) a.click();
   return url;
 }

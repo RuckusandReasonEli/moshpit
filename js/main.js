@@ -1,7 +1,8 @@
 import { Renderer } from './gl.js';
 import { EFFECTS } from './effects/index.js';
 import { AudioEngine, BANDS } from './audio.js';
-import { pickMime, bitrateFor, downloadBlob } from './export.js';
+import { pickMime, bitrateFor, presentResult } from './export.js';
+import { IS_IOS, IS_MOBILE, keepAwake, waitForMetadata } from './mobile.js';
 import { GLOBAL, Grader, isNeutral } from './global.js';
 import { Tracker } from './detect.js';
 
@@ -10,8 +11,9 @@ const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
 const fmt = t => { t = Math.max(0, t || 0); const m = Math.floor(t / 60), s = Math.floor(t % 60); return `${m}:${String(s).padStart(2, '0')}`; };
 const getFx = id => EFFECTS.find(f => f.id === id);
 
-const PREVIEW_LONG_SIDE = 960;
-const GALLERY_LONG_SIDE = 400;
+// Phones get lighter previews; renders still use the chosen output size.
+const PREVIEW_LONG_SIDE = IS_MOBILE ? 720 : 960;
+const GALLERY_LONG_SIDE = IS_MOBILE ? 240 : 400;
 const WINDOW = 3;
 
 const video = $('#video');
@@ -70,7 +72,7 @@ const linkedBands = fx => {
 /* ---------- Renderers ---------- */
 let mainR, galR;
 try {
-  mainR = new Renderer(mainCanvas);
+  mainR = new Renderer(mainCanvas, { preserve: IS_IOS });
   galR = new Renderer(document.createElement('canvas'));
 } catch (e) {
   viewer.querySelector('.dz-inner').innerHTML = `<h2>WebGL2 is required</h2><p>${e.message} Try a recent Chrome, Edge, Firefox or Safari.</p>`;
@@ -408,9 +410,9 @@ async function loadFile(file) {
   video.src = objectUrl;
   video.loop = false;
   try {
-    await new Promise((res, rej) => { video.onloadeddata = res; video.onerror = () => rej(new Error('This browser cannot decode that video.')); });
+    await waitForMetadata(video);
   } catch (e) {
-    alert(e.message + ' Try an H.264 MP4 or a WebM file.');
+    alert("This browser can't decode that video. Try an H.264 MP4 or a WebM file.");
     return;
   }
   setPreviewSizes();
@@ -423,6 +425,7 @@ async function loadFile(file) {
   setFill(startIn);
   updateWindowLabel();
   viewer.classList.add('has-video');
+  $('#render-jump').hidden = false;
   cards.forEach(c => c.el.classList.add('live'));
   $('#play-btn').disabled = false;
   $('#export-btn').disabled = false;
@@ -435,16 +438,32 @@ async function loadFile(file) {
 
 /* ---------- Playback ---------- */
 const playBtn = $('#play-btn'), playOverlay = $('#play-overlay');
+const soundBtn = $('#sound-btn');
+// video.play() must be the first thing a tap does: iOS only allows sound when
+// playback starts inside the tap itself (no awaits before it).
 async function play() {
-  await audio.resume();
+  const attempt = video.play();
+  audio.resume();
   try {
-    await video.play();
+    await attempt;
     playOverlay.hidden = true;
   } catch (e) {
-    playOverlay.hidden = false;
+    // No permission for sound yet (iPhone, Low Power Mode...): run muted so previews still work.
+    video.muted = true;
+    try { await video.play(); playOverlay.hidden = true; soundBtn.hidden = !state.ready; }
+    catch (e2) { playOverlay.hidden = false; }
   }
   syncPlayBtn();
 }
+function enableSound() {
+  if (!video.muted) return;
+  video.muted = false;
+  const p = video.play();
+  audio.resume();
+  soundBtn.hidden = true;
+  p.catch(() => { video.muted = true; soundBtn.hidden = false; });
+}
+soundBtn.addEventListener('click', e => { e.stopPropagation(); enableSound(); });
 function syncPlayBtn() { playBtn.classList.toggle('paused', video.paused); }
 playOverlay.addEventListener('click', () => { state.wantPlay = true; play(); });
 playBtn.addEventListener('click', () => {
@@ -454,6 +473,8 @@ document.addEventListener('keydown', e => {
   if (e.code === 'Space' && !/INPUT|SELECT|TEXTAREA|BUTTON/.test(document.activeElement.tagName) && state.ready && !exportJob) { e.preventDefault(); playBtn.click(); }
 });
 document.addEventListener('pointerdown', () => audio.resume(), { passive: true });
+// Any tap on the page is permission for sound on iOS.
+document.addEventListener('click', () => { if (state.ready && video.muted && !video.paused && !exportJob) enableSound(); });
 video.addEventListener('pause', syncPlayBtn);
 video.addEventListener('play', syncPlayBtn);
 
@@ -511,7 +532,7 @@ function renderPreview(step, dt) {
     if (state.fxOn) instance(mainInst, mainR, fx).render(resolve(fx), ctx, null);
     else mainR.blit(mainR.cur, null);
   }
-  if (galleryVisible && (step || galR.hasFrame)) {
+  if (galleryVisible && (step || galR.hasFrame) && !(IS_MOBILE && step && frameCount % 2)) {
     galR.time = t; galR.frameIndex = frameCount; galR.gradeParams = gp;
     if (step) galR.upload(video, video.videoWidth, video.videoHeight);
     else galR.regrade();
@@ -583,6 +604,7 @@ cancelBtn.addEventListener('click', () => finishExport(true));
 
 async function startExport() {
   if (!state.ready || exportJob) return;
+  if (video.muted) enableSound(); // renders record the soundtrack; unmute inside this tap
   if (typeof MediaRecorder === 'undefined') { alert('This browser does not support MediaRecorder, which is needed to render video.'); return; }
   const fx = getFx(state.selected);
   const res = $('#ex-res').value, quality = $('#ex-quality').value, range = $('#ex-range').value, format = $('#ex-format').value;
@@ -616,10 +638,11 @@ async function startExport() {
   const stopped = new Promise(r => { rec.onstop = r; });
 
   exportJob = { fx, inst, rec, chunks, stopped, vtrack, manual, start, end, w, h, mime, lastT: performance.now(), t0: performance.now(), finishing: false };
+  keepAwake().then(lock => { if (exportJob) exportJob.wake = lock; else if (lock) lock.release(); });
   document.body.classList.add('exporting');
   exportBtn.hidden = true; cancelBtn.hidden = false;
   $('#render-overlay').hidden = false;
-  $('#download-again').hidden = true;
+  $('#result').hidden = true;
   note.textContent = `${w}x${h}, ${mime.split(';')[0].replace('video/', '').toUpperCase()}${withAudio ? ' with audio' : ''}. You can still tweak sliders while it renders.`;
   setRenderProgress(0, end - start);
 
@@ -674,6 +697,7 @@ async function finishExport(cancelled) {
   if (job.rec.state !== 'inactive') job.rec.stop();
   await job.stopped;
   job.vtrack.stop();
+  if (job.wake) job.wake.release().catch(() => {});
   exportJob = null;
   document.body.classList.remove('exporting');
   exportBtn.hidden = false; cancelBtn.hidden = true;
@@ -687,11 +711,8 @@ async function finishExport(cancelled) {
     const tag = state.fxOn ? job.fx.id : 'global';
     const name = `${state.fileName}_${tag}_${job.w}x${job.h}.${ext}`;
     if (lastDownload) URL.revokeObjectURL(lastDownload);
-    lastDownload = downloadBlob(blob, name);
-    const again = $('#download-again');
-    again.href = lastDownload; again.download = name; again.hidden = false;
-    again.textContent = `Download again (${(blob.size / 1e6).toFixed(1)} MB)`;
-    note.textContent = `Saved ${name}.`;
+    lastDownload = presentResult(blob, name, $('#result'));
+    note.textContent = IS_IOS ? `Ready: ${name}. Tap ${$('#result button') ? 'Save video' : 'Download'} to keep it.` : `Saved ${name}.`;
   } else {
     note.textContent = cancelled ? 'Render cancelled.' : 'Nothing was recorded. Try again with the tab in the foreground.';
   }
