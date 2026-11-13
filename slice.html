@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Slice Pause · Ruckus &amp; Reason Video Portal</title>
+  <meta name="description" content="Slice a clip into up to 10 strips, freeze chosen strips on the beat while the rest keep playing, then snap back in sync. Runs in your browser.">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 32 32%27%3E%3Crect width=%2732%27 height=%2732%27 rx=%278%27 fill=%27%23ff4fa3%27/%3E%3Crect x=%278%27 y=%278%27 width=%2716%27 height=%2716%27 rx=%273%27 fill=%27%2353f0ff%27/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="css/cut.css">
+  <link rel="stylesheet" href="css/slice.css">
+</head>
+<body class="cut-page slice-page">
+  <header class="topbar">
+    <div class="brand">
+      <span class="logo" aria-hidden="true"></span>
+      <div>
+        <h1 class="app-name"><span class="n1">RUCKUS &amp; REASON</span><span class="n2">VIDEO PORTAL</span></h1>
+        <p>Slice Pause: freeze strips of your clip on the beat.</p>
+      </div>
+    </div>
+    <nav class="modes" aria-label="Tools">
+      <a href="index.html">Effects</a>
+      <a href="cut.html">Beat Cut</a>
+      <a href="slice.html" class="on" aria-current="page">Slice Pause</a>
+    </nav>
+    <div class="top-actions">
+      <label class="btn btn-primary" for="file-input">Upload video</label>
+      <input id="file-input" type="file" accept="video/*" hidden>
+    </div>
+  </header>
+
+  <main class="layout">
+    <section class="stage">
+      <div class="viewer" id="viewer">
+        <canvas id="slice-canvas" width="1280" height="720"></canvas>
+        <div class="dropzone" id="dropzone">
+          <div class="dz-inner">
+            <div class="dz-icon" aria-hidden="true"></div>
+            <h2><span class="desk">Drop a video to start</span><span class="touch">Choose a video to start</span></h2>
+            <p>Slice it into up to 10 strips, pick which strips freeze on each pause, and render. Unfrozen strips keep playing; when a pause ends every strip snaps back in sync.</p>
+            <label class="btn btn-primary" for="file-input">Choose a file</label>
+          </div>
+        </div>
+        <button class="play-overlay" id="play-overlay" hidden>Tap to start preview</button>
+        <button class="sound-pill" id="sound-btn" hidden>Tap for sound</button>
+        <div class="viewer-badge" id="badge">Slice Pause</div>
+        <div class="beat-dots" id="beat-dots"><i></i><i></i><i></i><i></i></div>
+        <div class="render-overlay" id="render-overlay" hidden>
+          <div class="render-card">
+            <div class="render-title">Rendering <span id="render-pct">0%</span></div>
+            <div class="progress"><div class="progress-fill" id="render-fill"></div></div>
+            <div class="render-sub" id="render-sub">Keep this tab visible while it renders.</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="transport">
+        <button class="icon-btn" id="play-btn" title="Play / pause (space)" disabled>
+          <svg viewBox="0 0 24 24" class="i-pause"><path d="M7 5h3v14H7zM14 5h3v14h-3z"/></svg>
+          <svg viewBox="0 0 24 24" class="i-play"><path d="M8 5l11 7-11 7z"/></svg>
+        </button>
+        <div class="timecode" id="timecode">0:00.0 / 0:00.0</div>
+        <div class="section-ctl">
+          <label>Start <input type="number" id="sec-start" min="0" step="0.1" value="0"></label>
+          <label>End <input type="number" id="sec-end" min="0" step="0.1" value="0"></label>
+          <span class="muted small" id="sec-len"></span>
+        </div>
+        <label class="check beat-only"><input type="checkbox" id="click-toggle"> Click track</label>
+        <div class="vol">
+          <button class="icon-btn" id="mute-btn" title="Mute monitor">
+            <svg viewBox="0 0 24 24"><path d="M4 9h4l5-4v14l-5-4H4z"/><path class="wave" d="M16 8.5a5 5 0 0 1 0 7M18.5 6a8.5 8.5 0 0 1 0 12" fill="none" stroke="currentColor" stroke-width="2"/></svg>
+          </button>
+          <input type="range" id="volume" min="0" max="1" step="0.01" value="0.8" aria-label="Monitor volume">
+        </div>
+      </div>
+
+      <div class="timeline-wrap">
+        <canvas id="timeline" height="76"></canvas>
+      </div>
+      <p class="hint">Pink blocks are pauses (the selected one is outlined). Tap a block to edit it, or tap anywhere else to jump there. The shaded area is outside the render section.</p>
+
+      <section class="block pause-editor" id="pause-editor">
+        <div class="block-head">
+          <div><h2 id="pe-title">Pauses</h2><p class="muted" id="pe-sub">Add a video to start placing pauses.</p></div>
+          <div class="head-actions">
+            <button class="btn btn-ghost btn-sm" id="pe-prev" title="Previous pause">‹ Prev</button>
+            <button class="btn btn-ghost btn-sm" id="pe-next" title="Next pause">Next ›</button>
+          </div>
+        </div>
+        <p class="field-label">Strips that freeze during this pause <span class="muted small">(tap to toggle)</span></p>
+        <div class="strip-picker" id="strip-picker"></div>
+        <div class="row pe-actions">
+          <button class="btn btn-sm" id="pe-all">All</button>
+          <button class="btn btn-sm" id="pe-none">None</button>
+          <button class="btn btn-sm" id="pe-invert">Invert</button>
+          <button class="btn btn-sm beat-only" id="pe-reset" title="Go back to the pattern's choice">Use pattern</button>
+        </div>
+        <div class="free-only">
+          <div class="two">
+            <label class="field">Starts at (s)<input type="number" id="pe-start" min="0" step="0.05"></label>
+            <label class="field">Lasts (s)<input type="number" id="pe-len" min="0.05" step="0.05"></label>
+          </div>
+          <div class="row pe-actions">
+            <button class="btn btn-primary btn-sm" id="pe-add">+ Add pause at playhead</button>
+            <button class="btn btn-ghost btn-sm" id="pe-delete">Delete this pause</button>
+          </div>
+        </div>
+      </section>
+    </section>
+
+    <aside class="panel">
+      <section class="block">
+        <div class="block-head"><div><h2>Slices</h2><p class="muted">Cut the frame into strips.</p></div></div>
+        <div class="field">
+          <label>Direction</label>
+          <div class="seg seg-wide" id="dir">
+            <button class="seg-btn is-on" data-v="0">Vertical (columns)</button>
+            <button class="seg-btn" data-v="1">Horizontal (rows)</button>
+          </div>
+        </div>
+        <div class="param">
+          <div class="param-head"><span class="param-label">Number of slices</span><span class="param-val" id="count-val">4</span></div>
+          <input type="range" id="count" min="2" max="10" step="1" value="4">
+        </div>
+        <div class="param">
+          <div class="param-head"><span class="param-label">Divider width</span><span class="param-val" id="gap-val">0 px</span></div>
+          <input type="range" id="gap" min="0" max="16" step="0.5" value="0">
+        </div>
+        <div class="two">
+          <label class="field">Divider color<input type="color" id="gap-color" value="#000000"></label>
+          <label class="field">Frozen strips look
+            <select id="look">
+              <option value="0" selected>Unchanged</option>
+              <option value="1">Dimmed</option>
+              <option value="2">Black &amp; white</option>
+              <option value="3">Highlighted</option>
+              <option value="4">Inverted</option>
+            </select>
+          </label>
+        </div>
+      </section>
+
+      <section class="block">
+        <div class="block-head"><div><h2>Timing</h2><p class="muted" id="tempo-status">Place pauses by hand, or lock them to a beat.</p></div></div>
+        <div class="field">
+          <div class="seg seg-wide" id="mode">
+            <button class="seg-btn" data-v="free">Free form</button>
+            <button class="seg-btn is-on" data-v="beat">On the beat</button>
+          </div>
+        </div>
+        <div class="beat-only">
+          <div class="tempo-row">
+            <div class="field bpm-field">
+              <label for="bpm">BPM</label>
+              <input type="number" id="bpm" min="40" max="300" step="0.1" value="120">
+            </div>
+            <button class="btn btn-sm" id="half-btn" title="Half time">÷2</button>
+            <button class="btn btn-sm" id="double-btn" title="Double time">×2</button>
+            <button class="btn btn-sm" id="tap-btn" title="Tap along to the beat">Tap</button>
+          </div>
+          <button class="btn btn-block" id="detect-btn" disabled>Detect beat from the clip's audio</button>
+          <div class="param">
+            <div class="param-head"><span class="param-label">Beat offset</span><span class="param-val" id="offset-val">0 ms</span></div>
+            <input type="range" id="offset" min="0" max="1" step="0.005" value="0">
+          </div>
+          <div class="two">
+            <label class="field">Pause every
+              <select id="every">
+                <option value="1">1 beat</option>
+                <option value="2" selected>2 beats</option>
+                <option value="4">4 beats (1 bar)</option>
+                <option value="8">8 beats</option>
+                <option value="16">16 beats</option>
+              </select>
+            </label>
+            <label class="field">For
+              <select id="hold">
+                <option value="0.25">1/4 beat</option>
+                <option value="0.5">1/2 beat</option>
+                <option value="1" selected>1 beat</option>
+                <option value="2">2 beats</option>
+                <option value="4">4 beats</option>
+              </select>
+            </label>
+          </div>
+          <div class="two">
+            <label class="field">Strips that freeze
+              <select id="pattern">
+                <option value="alternate" selected>Alternate (odd / even)</option>
+                <option value="sweep">Sweep (one moves across)</option>
+                <option value="build">Build up (one more each time)</option>
+                <option value="halves">Halves (swap sides)</option>
+                <option value="random">Random</option>
+                <option value="all">All strips</option>
+              </select>
+            </label>
+            <label class="field">Random amount
+              <input type="range" id="density" min="0.1" max="0.9" step="0.05" value="0.5">
+            </label>
+          </div>
+          <button class="btn btn-ghost btn-sm" id="reshuffle-btn">Reshuffle random picks</button>
+          <p class="hint">Edits you make to individual pauses are kept when you change the pattern or tempo.</p>
+        </div>
+        <div class="free-only">
+          <p class="hint">Use <b>+ Add pause at playhead</b> under the timeline. Each new pause starts with the opposite strips of the one before it, so the frozen strips change every time.</p>
+        </div>
+      </section>
+
+      <section class="block">
+        <div class="block-head"><div><h2>Render</h2><p class="muted">Renders the section in real time with the clip's audio.</p></div></div>
+        <div class="export-grid">
+          <label>Resolution
+            <select id="ex-res"><option value="source">Source (up to 1920 px)</option><option value="1080">1080p</option><option value="720" selected>720p</option><option value="480">480p</option></select>
+          </label>
+          <label>Quality
+            <select id="ex-quality"><option value="high" selected>High</option><option value="medium">Medium</option><option value="low">Small file</option></select>
+          </label>
+          <label>Format
+            <select id="ex-format"><option value="auto" selected>Auto (MP4 when supported)</option><option value="webm">WebM</option></select>
+          </label>
+        </div>
+        <button class="btn btn-primary btn-block" id="export-btn" disabled>Process &amp; download</button>
+        <button class="btn btn-ghost btn-block" id="cancel-btn" hidden>Cancel render</button>
+        <p class="muted small" id="export-note"></p>
+        <div id="result" class="result" hidden></div>
+      </section>
+    </aside>
+  </main>
+
+  <video id="video" playsinline preload="auto"></video>
+  <a class="render-jump" id="render-jump" href="#export-btn" hidden>Render</a>
+  <script type="module" src="js/slice/main.js"></script>
+</body>
+</html>

@@ -8,6 +8,7 @@ Two tools, switchable from the header:
 
 - **Effects** (`index.html`): one clip through glitch, mosh and feedback effects, with audio-reactive EQ linking.
 - **Beat Cut** (`cut.html`): up to 5 clips edited together on the beat.
+- **Slice Pause** (`slice.html`): cut one clip into strips and freeze chosen strips on the beat.
 
 ## Beat Cut
 
@@ -25,6 +26,16 @@ Two tools, switchable from the header:
 5. **Overlap** keeps previous clips bleeding through the new one for up to 4 beats, using the **Overlap blend** mode (Screen, Add, Difference and Multiply get aggressive). Each clip has its own **Opacity**. Optional **Punch zoom** and **Flash** hit on every cut.
 6. **Frame**: match the first clip, 16:9, 9:16 for Reels, 1:1 or 4:5. Clips are cropped to fill.
 7. Set the **Start / End** section (cuts stay locked to the song's beat grid), then **Process & download**.
+
+## Slice Pause
+
+1. Upload a clip. Choose **Vertical (columns)** or **Horizontal (rows)** and **2 to 10 slices**, with an optional divider width and color.
+2. Pick the timing:
+   - **On the beat:** type a BPM, tap it, or detect it from the clip's audio; nudge **Beat offset**. Choose **Pause every** (1 to 16 beats) and **For** (1/4 to 4 beats), and a pattern for which strips freeze: Alternate, Sweep, Build up, Halves, Random or All.
+   - **Free form:** move the playhead and tap **+ Add pause at playhead**, then set its start and length in seconds. Each new pause starts with the opposite strips of the one before it.
+3. Edit any pause: tap its block on the timeline (or use Prev / Next) and toggle the strips that freeze. In beat mode your edits are kept when you change the pattern or tempo; **Use pattern** reverts one.
+4. During a pause the chosen strips hold the frame from the moment the pause began while the others keep playing. When the pause ends every strip jumps back to the live picture, so they are in sync again. **Frozen strips look** can dim, desaturate, tint or invert the held strips.
+5. Set the Start / End section and **Process & download**. The clip's audio plays straight through.
 
 ## Effects
 
@@ -108,6 +119,9 @@ css/cut.css         Beat Cut styles
 js/cut/main.js      Beat Cut: clips, clock, compositing, timeline, export
 js/cut/beat.js      Tempo and beat-phase detection, tap tempo
 js/cut/schedule.js  Seeded cut-list generator
+slice.html          Slice Pause tool
+js/slice/main.js    Slice Pause: pauses, freeze shader, timeline, export
+css/slice.css       Slice Pause styles
 css/style.css       Styles
 js/global.js        Global Effects grading stage
 js/detect.js        Shared MediaPipe face/hand/pose tracker
